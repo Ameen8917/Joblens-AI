@@ -33,6 +33,22 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 
 ---
 
+## 🎬 Demo & Screenshots
+
+![JobLens AI Demo](./assets/demo.gif)
+
+### Score Card & Skill Grid
+![Score Card](./assets/score-card.png)
+
+### Gap Analysis
+![Gap Analysis](./assets/gap-analysis.png)
+
+### Cover Letter Mode
+![Cover Letter](./assets/cover-letter.png)
+
+### Interview Prep
+![Interview Prep](./assets/interview-prep.png)
+
 ## ⬡ Tech Stack
 
 ### Backend
