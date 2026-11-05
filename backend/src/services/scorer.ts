@@ -8,25 +8,50 @@ const cosineSimilarity = (a: number[], b: number[]): number => {
   return dot / (magA * magB);
 };
 
-const normalizeSkill = (s: string): string =>
-  s.toLowerCase().replace(/[^a-z0-9+#.]/g, " ").trim();
+const ALIASES: Record<string, string[]> = {
+  javascript: ["js", "es6", "ecmascript"], typescript: ["ts"], "node.js": ["node", "nodejs"],
+  react: ["react.js", "reactjs"], "next.js": ["next", "nextjs"], vue: ["vue.js", "vuejs"], express: ["express.js", "expressjs"],
+  postgresql: ["postgres", "pg"], mongodb: ["mongo"], kubernetes: ["k8s"], go: ["golang"], "c#": ["csharp", "c sharp"],
+  aws: ["amazon web services"], gcp: ["google cloud platform", "google cloud"], "ci cd": ["cicd"],
+  rest: ["rest api", "rest apis", "restful", "restful api", "restful apis"],
+  "machine learning": ["ml"], "artificial intelligence": ["ai"],
+};
 
-const skillsMatch = (jdSkill: string, resumeSkill: string): "matched" | "partial" | null => {
-  const jd = normalizeSkill(jdSkill);
-  const rs = normalizeSkill(resumeSkill);
-  if (jd === rs || jd.includes(rs) || rs.includes(jd)) return "matched";
-  const aliases: Record<string, string[]> = {
-    javascript: ["js", "es6"], typescript: ["ts"], "node.js": ["node", "nodejs"],
-    "react.js": ["react", "reactjs"], "next.js": ["next", "nextjs"],
-    postgresql: ["postgres", "pg"], mongodb: ["mongo"], kubernetes: ["k8s"],
-    "amazon web services": ["aws"], "google cloud platform": ["gcp"],
-  };
-  for (const [canonical, alts] of Object.entries(aliases)) {
-    if ([canonical, ...alts].includes(jd) && [canonical, ...alts].includes(rs)) return "matched";
-  }
-  const jdWords = jd.split(" ").filter(w => w.length > 2);
-  const rsWords = rs.split(" ").filter(w => w.length > 2);
-  if (jdWords.some(w => rsWords.includes(w))) return "partial";
+// A resume skill that proves a broader job requirement.
+const IMPLIES: Record<string, string[]> = {
+  postgresql: ["sql"], mysql: ["sql"], sqlite: ["sql"], "sql server": ["sql"],
+  mongodb: ["nosql"], dynamodb: ["nosql"], cassandra: ["nosql"], redis: ["nosql"],
+};
+
+const CANONICAL = new Map(Object.entries(ALIASES).flatMap(([name, alts]) => alts.map((alt): [string, string] => [alt, name])));
+const IGNORED_WORDS = new Set(["programming", "language", "languages", "framework", "frameworks", "library", "libraries", "and", "or", "with"]);
+
+const canonicalize = (phrase: string): string => CANONICAL.get(phrase) ?? phrase;
+
+const normalizeSkill = (skill: string): string[] => {
+  const tokens = skill.toLowerCase().replace(/[^a-z0-9+#.]/g, " ").split(/\s+/).map(t => t.replace(/\.+$/, "")).filter(Boolean);
+  const meaningful = tokens.filter(t => !IGNORED_WORDS.has(t));
+  return meaningful.length ? meaningful : tokens;
+};
+
+/**
+ * Compares whole words, never substrings, so "go" can't match "mongodb".
+ * Partial means one skill's words are all in the other, as in "react" and "react native".
+ */
+export const skillsMatch = (jdSkill: string, resumeSkill: string): "matched" | "partial" | null => {
+  const jdTokens = normalizeSkill(jdSkill);
+  const resumeTokens = normalizeSkill(resumeSkill);
+  const jd = canonicalize(jdTokens.join(" "));
+  const resume = canonicalize(resumeTokens.join(" "));
+  if (!jd || !resume) return null;
+  if (jd === resume || IMPLIES[resume]?.includes(jd)) return "matched";
+  if (IMPLIES[jd]?.includes(resume)) return "partial";
+
+  const jdWords = jdTokens.map(canonicalize);
+  const resumeWords = resumeTokens.map(canonicalize);
+  const [shorter, longer] = jdWords.length <= resumeWords.length ? [jdWords, resumeWords] : [resumeWords, jdWords];
+  // Single letters such as "c" are too ambiguous to count as part of a longer skill.
+  if (shorter.join(" ").length >= 2 && shorter.every(word => longer.includes(word))) return "partial";
   return null;
 };
 
@@ -65,6 +90,6 @@ export const computeScore = (
   return {
     programmaticScore, semanticScore, finalScore, matchedSkills,
     missingRequired, missingNiceToHave,
-    yearsOfExperienceDelta: resume.yearsOfExperience - jd.yearsOfExperience,
+    yearsOfExperienceDelta: Math.round((resume.yearsOfExperience - jd.yearsOfExperience) * 10) / 10,
   };
 };

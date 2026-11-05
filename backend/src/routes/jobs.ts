@@ -6,8 +6,8 @@ import { asyncHandler, AppError } from "../middleware/errorHandler";
 const router = Router();
 
 router.post("/parse", asyncHandler(async (req: Request, res: Response): Promise<void> => {
-  const result = z.object({ text: z.string().min(50) }).safeParse(req.body);
-  if (!result.success) throw new AppError(result.error.errors[0].message, 400);
+  const result = z.object({ text: z.string().min(50, "Job description too short (minimum 50 characters)") }).safeParse(req.body);
+  if (!result.success) throw new AppError(result.error.issues[0].message, 400);
   const { jobId, parsed } = await parseJD(result.data.text);
   res.status(201).json({ success: true, jobId, parsed });
 }));

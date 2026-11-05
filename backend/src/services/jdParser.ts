@@ -1,47 +1,33 @@
 import { z } from "zod";
-import { generateJSON, generateEmbedding } from "../config/gemini";
+import { generateStructured, generateEmbedding } from "../config/gemini";
+import { AppError } from "../middleware/errorHandler";
 import { Job, IJob } from "../models/Job";
 import { ParsedJD } from "../types";
 
-const ParsedJDSchema = z.object({
+export const ParsedJDSchema = z.object({
   title: z.string().default("Unknown"),
-  company: z.string().default("Unknown"),
+  company: z.string().describe("Company name, or Unknown").default("Unknown"),
   roleType: z.enum(["IC", "Manager", "Lead", "Unknown"]).default("Unknown"),
-  requiredSkills: z.array(z.string()).default([]),
-  niceToHaveSkills: z.array(z.string()).default([]),
-  yearsOfExperience: z.number().default(0),
-  educationRequired: z.string().default(""),
-  tools: z.array(z.string()).default([]),
-  culturalSignals: z.array(z.string()).default([]),
-  responsibilities: z.array(z.string()).default([]),
+  requiredSkills: z.array(z.string()).describe("Must-have skills, lowercase").default([]),
+  niceToHaveSkills: z.array(z.string()).describe("Nice-to-have skills, lowercase").default([]),
+  yearsOfExperience: z.number().describe("Minimum years required, or 0 if not stated").default(0),
+  educationRequired: z.string().describe("Degree requirement, or empty string").default(""),
+  tools: z.array(z.string()).describe("Specific tools and software, lowercase").default([]),
+  culturalSignals: z.array(z.string()).describe("Culture and soft-skill signals").default([]),
+  responsibilities: z.array(z.string()).describe("3-6 key responsibilities as action-verb phrases").default([]),
 });
 
 const buildJDPrompt = (rawText: string): string => `
 You are a recruitment data extraction specialist. Extract structured information from the job description below.
-Return ONLY valid JSON — no markdown, no explanation:
-{
-  "title": "job title",
-  "company": "company name or Unknown",
-  "roleType": "IC | Manager | Lead | Unknown",
-  "requiredSkills": ["must-have skills, lowercase"],
-  "niceToHaveSkills": ["nice-to-have skills, lowercase"],
-  "yearsOfExperience": 0,
-  "educationRequired": "degree requirement or empty string",
-  "tools": ["specific tools/software, lowercase"],
-  "culturalSignals": ["culture/soft-skill signals"],
-  "responsibilities": ["3-6 key responsibilities, action-verb phrases"]
-}
 JOB DESCRIPTION:
 ${rawText}
 `;
 
 export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed: ParsedJD }> => {
   if (!rawText || rawText.trim().length < 50)
-    throw new Error("Job description too short (minimum 50 characters)");
-  const raw = await generateJSON<unknown>(buildJDPrompt(rawText));
-  const result = ParsedJDSchema.safeParse(raw);
-  if (!result.success) throw new Error(`JD parsing failed: ${result.error.message}`);
-  const parsed: ParsedJD = { ...result.data, rawText };
+    throw new AppError("Job description too short (minimum 50 characters)", 400);
+  const data = await generateStructured(ParsedJDSchema, [{ text: buildJDPrompt(rawText) }]);
+  const parsed: ParsedJD = { ...data, rawText };
   const embeddingText = [
     `Role: ${parsed.title}`,
     `Required skills: ${parsed.requiredSkills.join(", ")}`,
@@ -56,6 +42,6 @@ export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed:
 
 export const getJobById = async (jobId: string): Promise<IJob> => {
   const job = await Job.findById(jobId);
-  if (!job) throw new Error(`Job not found: ${jobId}`);
+  if (!job) throw new AppError(`Job not found: ${jobId}`, 404);
   return job;
 };

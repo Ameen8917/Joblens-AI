@@ -10,7 +10,7 @@ const router = Router();
 
 router.post("/", asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const body = z.object({ mode: z.enum(["fit", "gaps", "cover-letter", "interview"]), jobId: z.string().min(1), resumeId: z.string().min(1) }).safeParse(req.body);
-  if (!body.success) throw new AppError(body.error.errors[0].message, 400);
+  if (!body.success) throw new AppError(body.error.issues[0].message, 400);
   const { mode, jobId, resumeId } = body.data;
   const [job, resume] = await Promise.all([getJobById(jobId), getResumeById(resumeId)]);
   const score = computeScore(job.parsed, resume.parsed, job.embedding, resume.embedding);
@@ -25,7 +25,7 @@ router.post("/", asyncHandler(async (req: Request, res: Response): Promise<void>
 
 router.post("/score-only", asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const body = z.object({ jobId: z.string().min(1), resumeId: z.string().min(1) }).safeParse(req.body);
-  if (!body.success) throw new AppError(body.error.errors[0].message, 400);
+  if (!body.success) throw new AppError(body.error.issues[0].message, 400);
   const [job, resume] = await Promise.all([getJobById(body.data.jobId), getResumeById(body.data.resumeId)]);
   const scoreBreakdown = computeScore(job.parsed, resume.parsed, job.embedding, resume.embedding);
   res.json({ success: true, scoreBreakdown });
