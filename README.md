@@ -2,15 +2,15 @@
 
 > **Know your fit before you apply.**
 
-A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four distinct AI-powered analysis modes.
+A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four AI-powered analysis modes, plus resume tailoring and mock interview previews.
 
 ---
 
 ## ✦ Features
 
 ### Hybrid Scoring Engine
-- **Programmatic score (40%)** — direct skill array comparison with alias matching (e.g. `node` → `node.js`, `aws` → `amazon web services`)
-- **Semantic score (60%)** — vector embeddings via `text-embedding-004` + cosine similarity to catch conceptual matches keyword search misses
+- **Programmatic score (40%)** — whole-word skill comparison with alias matching (e.g. `node` → `node.js`, `aws` → `amazon web services`), so `go` never matches `mongodb`
+- **Semantic score (60%)** — vector embeddings via `gemini-embedding-001` + cosine similarity to catch conceptual matches keyword search misses
 - Single weighted final score (0–100) with a full breakdown
 
 ### Four AI Analysis Modes
@@ -21,15 +21,20 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | **Cover Letter** | Tailored letter citing your actual projects and experience |
 | **Interview Prep** | 9 questions (behavioral / technical / role-specific) with resume-specific answer frameworks |
 
-### Smart Parsing Pipeline
-- JD text → Gemini Flash → structured JSON (required skills, nice-to-have, YOE, tools, culture signals, responsibilities)
-- PDF resume → `pdf-parse` → Gemini Flash → structured JSON (skills, tools, work history, projects, education)
-- Both stored in MongoDB Atlas with vector embeddings for semantic retrieval
+### Previews
+**Resume Tailoring** and **Mock Interview** (with optional voice input) run in the browser on rule-based logic until their backend exists. They are labelled as previews in the app.
 
-### Job Tracker Sidebar
+### Smart Parsing Pipeline
+- JD text → Gemini 2.5 Flash → structured JSON (required skills, nice-to-have, YOE, tools, culture signals, responsibilities)
+- PDF resume → sent directly to Gemini 2.5 Flash → structured JSON (skills, tools, work history, projects, education)
+- Output is constrained with `responseSchema`, validated with Zod, and retried if a request fails or the response is invalid
+- Both stored in MongoDB with their embeddings. Parsing the same job description again reuses the stored result
+
+### Saved Jobs, History and Settings
 - Every analyzed job saved automatically with its score badge
-- Switch between saved jobs instantly — no re-parsing
-- Up to 20 jobs tracked per session
+- Switch between saved jobs with no re-parsing
+- Up to 20 jobs kept in this browser, searchable on the History page
+- Theme, display name and default results tab on the Settings page
 
 ---
 
@@ -57,11 +62,11 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | Runtime | Node.js + TypeScript |
 | Framework | Express.js |
 | Database | MongoDB Atlas |
-| AI Model | Google Gemini 1.5 Flash |
-| Embeddings | text-embedding-004 |
-| PDF Parsing | pdf-parse |
+| AI Model | Google Gemini 2.5 Flash (also reads the PDF) |
+| Embeddings | gemini-embedding-001 |
 | Validation | Zod |
 | File Upload | Multer |
+| Tests | Vitest |
 
 ### Frontend
 | Layer | Technology |
@@ -70,8 +75,8 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | Build Tool | Vite |
 | Styling | Tailwind CSS |
 | HTTP Client | Axios |
-| Routing | React Router v6 |
-| Fonts | Sora + IBM Plex Mono |
+| Routing | React Router v7 |
+| Font | Plus Jakarta Sans |
 
 ---
 
@@ -82,14 +87,14 @@ joblens-ai/
 ├── backend/
 │   ├── src/
 │   │   ├── config/
-│   │   │   ├── database.ts        # MongoDB Atlas connection
-│   │   │   └── gemini.ts          # Gemini Flash + embedding init
+│   │   │   ├── database.ts        # MongoDB connection
+│   │   │   └── gemini.ts          # Gemini structured output + embeddings
 │   │   ├── models/
 │   │   │   ├── Job.ts             # Job schema (raw + parsed JSON + embedding)
-│   │   │   └── Resume.ts          # Resume schema (raw + parsed JSON + embedding)
+│   │   │   └── Resume.ts          # Resume schema (parsed JSON + embedding)
 │   │   ├── services/
-│   │   │   ├── jdParser.ts        # JD text → Gemini → structured JSON
-│   │   │   ├── resumeParser.ts    # PDF → pdf-parse → Gemini → structured JSON
+│   │   │   ├── jdParser.ts        # JD text → Gemini → structured JSON, deduplicated
+│   │   │   ├── resumeParser.ts    # PDF → Gemini → structured JSON
 │   │   │   ├── scorer.ts          # Hybrid scoring engine (cosine + programmatic)
 │   │   │   └── modePrompts.ts     # 4 mode-specific Gemini prompts
 │   │   ├── routes/
@@ -99,9 +104,11 @@ joblens-ai/
 │   │   ├── middleware/
 │   │   │   ├── upload.ts          # Multer PDF config (5MB, memory storage)
 │   │   │   └── errorHandler.ts    # Global error handler + asyncHandler wrapper
+│   │   ├── utils/                 # Retries, structured output, Zod → Gemini schema
 │   │   ├── types/index.ts         # All shared TypeScript interfaces
 │   │   ├── app.ts                 # Express app setup + CORS + routes
 │   │   └── server.ts              # Entry point — DB + Gemini init + listen
+│   ├── tests/                     # Vitest unit tests
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── .env.example
@@ -109,20 +116,26 @@ joblens-ai/
 └── frontend/
     ├── src/
     │   ├── api/
-    │   │   ├── client.ts          # Axios instance with proxy
+    │   │   ├── client.ts          # Axios instance
     │   │   ├── jobs.ts            # parseJD, getJob
-    │   │   ├── resumes.ts         # parseResume (multipart)
-    │   │   └── analyze.ts         # analyze (4 modes), scoreOnly
+    │   │   ├── resumes.ts         # parseResume (multipart), getResume
+    │   │   ├── analyze.ts         # analyze (4 modes), scoreOnly
+    │   │   └── preview.ts         # Browser stand-ins for tailoring and mock interview
     │   ├── components/ui/
     │   │   ├── ScoreCard.tsx      # Score circle + semantic/programmatic bars
     │   │   ├── SkillGrid.tsx      # ✓ matched / ~ partial / ✗ missing pills
-    │   │   ├── ModeTabs.tsx       # 4-tab switcher
+    │   │   ├── ModeTabs.tsx       # 6-tab switcher
     │   │   ├── ModeResults.tsx    # FitResult, GapResult, CoverLetterResult, InterviewResult
+    │   │   ├── ResumeTailoring.tsx # Tailoring preview
+    │   │   ├── MockInterview.tsx  # Mock interview preview with voice input
     │   │   ├── JDInput.tsx        # Textarea → collapses to badge on parse
     │   │   ├── ResumeUpload.tsx   # Drag-and-drop PDF zone
-    │   │   └── JobSidebar.tsx     # Saved jobs with score badges
+    │   │   └── JobSidebar.tsx     # Navigation + saved jobs with score badges
+    │   ├── hooks/useSettings.ts   # Settings stored in the browser
     │   ├── pages/
-    │   │   └── Analyze.tsx        # Main page — full analysis flow
+    │   │   ├── Analyze.tsx        # Main page — full analysis flow
+    │   │   ├── History.tsx        # Searchable list of past analyses
+    │   │   └── Settings.tsx       # Theme, name and default tab
     │   ├── types/index.ts         # Frontend TypeScript types
     │   └── index.css              # CSS variables + animations
     ├── package.json
@@ -145,8 +158,8 @@ joblens-ai/
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/your-username/joblens-ai.git
-cd joblens-ai
+git clone https://github.com/Ameen8917/Joblens-AI.git
+cd Joblens-AI
 ```
 
 ### 2. Setup Backend
@@ -184,7 +197,12 @@ npm run dev
 
 Frontend runs at `http://localhost:5173`
 
-> The Vite dev server proxies all `/api/*` requests to `localhost:5000` — no CORS config needed during development.
+### 4. Run the tests
+
+```bash
+cd backend
+npm test
+```
 
 ---
 
@@ -193,7 +211,7 @@ Frontend runs at `http://localhost:5173`
 ### Jobs
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST` | `/api/jobs/parse` | Parse raw JD text → structured JSON + jobId |
+| `POST` | `/api/jobs/parse` | Parse raw JD text → structured JSON + jobId. Text already parsed returns the existing job |
 | `GET` | `/api/jobs/:id` | Retrieve a previously parsed JD |
 
 **Request — POST /api/jobs/parse**
@@ -265,13 +283,13 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 ```
 
 **Programmatic Score** — compares `jd.requiredSkills[]` against `resume.skills[] + resume.tools[]`
-- Exact match or alias match → full credit
-- Partial word overlap → 0.5 credit
+- Exact match, alias match, or a skill that implies the requirement (`postgresql` → `sql`) → full credit
+- All of one skill's words appear in the other (`react` and `react native`) → 0.5 credit
 - No match → 0 credit
 - Score = earned credits / total required skills × 100
 
 **Semantic Score** — cosine similarity between JD and resume embeddings
-- Embeddings generated with `text-embedding-004`
+- Embeddings generated with `gemini-embedding-001`
 - Similarity remapped from [-1, 1] to [0, 100]
 - Catches conceptual matches that keyword comparison misses
 
@@ -304,21 +322,20 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 
 ## ⚠ Known Limitations
 
-- **Scanned PDFs** are not supported — resume must be a text-based PDF
-- **Gemini rate limits** — free tier has RPM limits; add retry logic for production
-- **No auth** — MVP has no user accounts; saved jobs are stored in browser localStorage
-- **MongoDB Vector Search index** must be created manually in Atlas UI for semantic search to work (the app falls back to cosine similarity computed in-memory for MVP)
+- **Gemini rate limits** — the free tier has request limits. Requests are retried, but heavy use can still fail
+- **No auth** — there are no user accounts, so anyone with a resume ID can read that stored resume. Saved jobs live in browser localStorage
+- **Semantic score runs high** — similarity is remapped from [-1, 1], and real embeddings rarely score near the bottom of that range. Recalibrating it is on the roadmap
+- **Resume Tailoring and Mock Interview** are rule-based previews, not yet AI-backed
 
 ---
 
 ## ✦ Roadmap
 
-- [ ] User authentication (JWT)
-- [ ] Export cover letter as `.docx`, interview prep as PDF
-- [ ] Atlas Vector Search index for server-side semantic retrieval
-- [ ] Multi-resume support (compare different resume versions against same JD)
-- [ ] LinkedIn JD import via URL
-- [ ] Deployment guide (Railway / Render)
+- [ ] Evidence-backed scoring: link each skill to the resume line that proves it
+- [ ] Quality test suite with expected results, and a recalibrated semantic score
+- [ ] AI-backed resume tailoring with accept and reject controls
+- [ ] Live mock interview with streamed follow-up questions
+- [ ] Live demo, CI and a one-command Docker setup
 
 ---
 
@@ -332,4 +349,4 @@ Built with React · Express · MongoDB Atlas · Google Gemini AI · TypeScript
 
 ## ✦ License
 
-MIT — free to use, modify, and distribute.
+MIT — see [LICENSE](./LICENSE).

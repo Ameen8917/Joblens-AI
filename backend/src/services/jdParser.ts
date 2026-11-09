@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { z } from "zod";
 import { generateStructured, generateEmbedding } from "../config/gemini";
 import { AppError } from "../middleware/errorHandler";
@@ -23,9 +24,21 @@ JOB DESCRIPTION:
 ${rawText}
 `;
 
+const MONGO_DUPLICATE_KEY = 11000;
+
+/** Ignores whitespace differences, so pasting the same job again counts as the same job. */
+export const hashJobText = (rawText: string): string =>
+  createHash("sha256").update(rawText.replace(/\s+/g, " ").trim()).digest("hex");
+
+const toResult = (job: IJob): { jobId: string; parsed: ParsedJD } => ({ jobId: String(job._id), parsed: job.parsed });
+
 export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed: ParsedJD }> => {
   if (!rawText || rawText.trim().length < 50)
     throw new AppError("Job description too short (minimum 50 characters)", 400);
+  const contentHash = hashJobText(rawText);
+  const existing = await Job.findOne({ contentHash });
+  if (existing) return toResult(existing);
+
   const data = await generateStructured(ParsedJDSchema, [{ text: buildJDPrompt(rawText) }]);
   const parsed: ParsedJD = { ...data, rawText };
   const embeddingText = [
@@ -35,9 +48,17 @@ export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed:
     `Responsibilities: ${parsed.responsibilities.join(". ")}`,
   ].join("\n");
   const embedding = await generateEmbedding(embeddingText);
-  const job = new Job({ rawText, parsed, embedding });
-  await job.save();
-  return { jobId: (job._id as unknown as string).toString(), parsed };
+  const job = new Job({ rawText, contentHash, parsed, embedding });
+  try {
+    await job.save();
+  } catch (error) {
+    // Two requests for the same text can both miss the lookup above. The unique index lets only one insert.
+    if ((error as { code?: number }).code !== MONGO_DUPLICATE_KEY) throw error;
+    const winner = await Job.findOne({ contentHash });
+    if (!winner) throw error;
+    return toResult(winner);
+  }
+  return { jobId: String(job._id), parsed };
 };
 
 export const getJobById = async (jobId: string): Promise<IJob> => {

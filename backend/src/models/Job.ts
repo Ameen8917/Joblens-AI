@@ -3,6 +3,7 @@ import { ParsedJD } from "../types";
 
 export interface IJob extends Document {
   rawText: string;
+  contentHash?: string;
   parsed: ParsedJD;
   embedding: number[];
   createdAt: Date;
@@ -12,6 +13,8 @@ export interface IJob extends Document {
 const JobSchema = new Schema<IJob>(
   {
     rawText: { type: String, required: true },
+    // Sparse so jobs stored before this field existed don't collide on a missing value.
+    contentHash: { type: String, unique: true, sparse: true },
     parsed: {
       title: { type: String, default: "" },
       company: { type: String, default: "" },

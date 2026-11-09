@@ -1,4 +1,4 @@
-import { useState, useCallback, ReactNode } from 'react';
+import { useState, useCallback, useRef, ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, Briefcase, CircleCheck, CircleX, Clock, FileText, House, LoaderCircle, Moon, Plus, Settings as SettingsIcon, Sparkles, Sun } from 'lucide-react';
 import { parseJD, getJob } from '../api/jobs';
@@ -98,59 +98,77 @@ export default function AnalyzePage() {
 
   const handleError = (e: unknown) => setError(e instanceof Error ? e.message : 'Something went wrong');
 
+  // Bumped when the user moves to a different job, so responses still in flight for the old one are dropped.
+  const session = useRef(0);
+  const trackSession = () => { const started = session.current; return () => started === session.current; };
+  const startSession = () => {
+    session.current += 1;
+    setJdLoading(false); setResumeLoading(false); setScoreLoading(false); setAnalyzeLoading(false);
+  };
+
   const timedScore = async (jId: string, rId: string) => {
+    const isCurrent = trackSession();
     setScoreLoading(true);
     const t0 = performance.now();
     try {
       const s = await scoreOnly(jId, rId);
-      setScore(s); setScoreMs(performance.now() - t0);
+      if (isCurrent()) { setScore(s); setScoreMs(performance.now() - t0); }
       return s;
-    } finally { setScoreLoading(false); }
+    } finally { if (isCurrent()) setScoreLoading(false); }
   };
 
   const runScore = useCallback(async (jId: string, rId: string, jd?: ParsedJD | null) => {
+    const isCurrent = trackSession();
     try {
       const s = await timedScore(jId, rId);
       const effectiveJD = jd ?? parsedJD;
       if (effectiveJD) {
+        // Saved under its own job and resume ids, so this stays correct even if the user has moved on.
         const entry: SavedJob = { id: `${jId}_${rId}`, jobId: jId, resumeId: rId, title: effectiveJD.title, company: effectiveJD.company, score: s.finalScore, savedAt: new Date().toISOString() };
         setSavedJobs(prev => { const u = [entry, ...prev.filter(j => j.id !== entry.id)].slice(0, 20); saveSaved(u); return u; });
-        setActiveJobId(entry.id);
+        if (isCurrent()) setActiveJobId(entry.id);
       }
-    } catch (e) { handleError(e); }
+    } catch (e) { if (isCurrent()) handleError(e); }
   }, [parsedJD]);
 
   const handleJDSubmit = async (text: string) => {
+    const isCurrent = trackSession();
     setJdLoading(true); setError(null); setScore(null); setModeData({});
     try {
       const { jobId: id, parsed } = await parseJD(text);
+      if (!isCurrent()) return;
       setJobId(id); setParsedJD(parsed);
       if (resumeId) await runScore(id, resumeId, parsed);
-    } catch (e) { handleError(e); } finally { setJdLoading(false); }
+    } catch (e) { if (isCurrent()) handleError(e); } finally { if (isCurrent()) setJdLoading(false); }
   };
 
   const handleResumeSubmit = async (file: File) => {
+    const isCurrent = trackSession();
     setResumeLoading(true); setError(null); setScore(null); setModeData({});
     try {
       const { resumeId: id, parsed } = await parseResume(file);
+      if (!isCurrent()) return;
       setResumeId(id); setParsedResume(parsed);
       if (jobId) await runScore(jobId, id);
-    } catch (e) { handleError(e); } finally { setResumeLoading(false); }
+    } catch (e) { if (isCurrent()) handleError(e); } finally { if (isCurrent()) setResumeLoading(false); }
   };
 
   const handleMode = useCallback(async (m: ResultTab) => {
     setMode(m);
     if (m === 'tailor' || m === 'mock') return; // frontend previews, no API call yet
     if (!jobId || !resumeId || modeData[m]) return;
+    const isCurrent = trackSession();
     setAnalyzeLoading(true); setError(null);
     try {
       const data = await analyze(m, jobId, resumeId);
+      if (!isCurrent()) return;
       setModeData(prev => ({ ...prev, [m]: data }));
       if (m === 'fit') setScore((data as FitAnalysisData).scoreBreakdown);
-    } catch (e) { handleError(e); } finally { setAnalyzeLoading(false); }
+    } catch (e) { if (isCurrent()) handleError(e); } finally { if (isCurrent()) setAnalyzeLoading(false); }
   }, [jobId, resumeId, modeData]);
 
   const reset = () => {
+    startSession();
     setJobId(null); setResumeId(null); setParsedJD(null); setParsedResume(null);
     setScore(null); setScoreMs(null); setModeData({}); setError(null); setActiveJobId(undefined); setMode(settings.defaultTab);
     navigate('/');
@@ -158,6 +176,8 @@ export default function AnalyzePage() {
 
   const loadSavedJob = async (job: SavedJob) => {
     navigate('/');
+    startSession();
+    const isCurrent = trackSession();
     setActiveJobId(job.id); setJobId(job.jobId); setResumeId(job.resumeId);
     setScore(null); setModeData({}); setError(null); setParsedJD(null); setParsedResume(null);
     try {
@@ -166,9 +186,10 @@ export default function AnalyzePage() {
         getJob(job.jobId).catch(() => null),
         getResume(job.resumeId).catch(() => null),
       ]);
+      if (!isCurrent()) return;
       if (jd) setParsedJD(jd.parsed);
       if (resume) setParsedResume(resume.parsed);
-    } catch (e) { handleError(e); }
+    } catch (e) { if (isCurrent()) handleError(e); }
   };
 
   const deleteSaved = (id: string) => {

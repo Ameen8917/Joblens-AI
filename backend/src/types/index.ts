@@ -70,32 +70,6 @@ export interface InterviewPrepOutput {
   }[];
 }
 
-export type AnalysisMode = "fit" | "gaps" | "cover-letter" | "interview";
-
-export interface AnalyzeRequest {
-  mode: AnalysisMode;
-  jobId: string;
-  resumeId: string;
-}
-
-export interface AnalyzeResponse<T> {
-  success: boolean;
-  mode: AnalysisMode;
-  data: T;
-}
-
-export interface ParseJDResponse {
-  success: boolean;
-  jobId: string;
-  parsed: ParsedJD;
-}
-
-export interface ParseResumeResponse {
-  success: boolean;
-  resumeId: string;
-  parsed: ParsedResume;
-}
-
 export interface ApiError {
   success: false;
   error: string;
