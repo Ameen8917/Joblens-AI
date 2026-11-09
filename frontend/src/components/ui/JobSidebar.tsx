@@ -1,4 +1,5 @@
-import { Bookmark, BrainCircuit, ChartNoAxesColumnIncreasing, House, X } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { Bookmark, BrainCircuit, ChartNoAxesColumnIncreasing, Clock, House, Settings, X } from 'lucide-react';
 import { SavedJob } from '../../types';
 
 interface Props {
@@ -12,6 +13,10 @@ interface Props {
 
 const scoreTone = (s: number) =>
   s >= 75 ? 'bg-good-soft text-good' : s >= 50 ? 'bg-warn-soft text-warn' : 'bg-bad-soft text-bad';
+
+const navCls = (active: boolean) =>
+  `flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+    active ? 'bg-brand-soft text-brand-dark' : 'text-body hover:bg-subtle'}`;
 
 export const Logo = () => (
   <div className="flex items-center gap-2">
@@ -27,16 +32,21 @@ export const JobSidebar = ({ jobs, activeId, onSelect, onDelete, onHome, homeAct
     <div className="px-2"><Logo /></div>
 
     <nav className="space-y-1">
-      <button onClick={onHome}
-        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
-          homeActive ? 'bg-brand-soft text-brand-dark' : 'text-body hover:bg-subtle'}`}>
+      <button onClick={onHome} className={navCls(homeActive)}>
         <House className="h-4 w-4" /> Home
       </button>
-      <div className="flex items-center gap-3 px-3 py-2 text-sm font-medium text-body">
-        <Bookmark className="h-4 w-4" /> Saved Jobs
-        <span className="ml-auto rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">{jobs.length}</span>
-      </div>
+      <NavLink to="/history" className={({ isActive }) => navCls(isActive)}>
+        <Clock className="h-4 w-4" /> History
+      </NavLink>
+      <NavLink to="/settings" className={({ isActive }) => navCls(isActive)}>
+        <Settings className="h-4 w-4" /> Settings
+      </NavLink>
     </nav>
+
+    <div className="flex items-center gap-3 px-3 text-sm font-semibold text-body">
+      <Bookmark className="h-4 w-4" /> Saved Jobs
+      <span className="ml-auto rounded-full bg-subtle px-2 py-0.5 text-xs font-semibold text-muted">{jobs.length}</span>
+    </div>
 
     <div className="-mt-4 min-h-0 flex-1 overflow-y-auto">
       {jobs.length === 0 ? (
@@ -48,7 +58,7 @@ export const JobSidebar = ({ jobs, activeId, onSelect, onDelete, onHome, homeAct
             return (
               <li key={job.id}>
                 <div onClick={() => onSelect(job)}
-                  className={`group flex cursor-pointer items-center gap-2 rounded-lg py-2 pl-10 pr-2 transition-colors ${
+                  className={`group flex cursor-pointer items-center gap-2 rounded-lg py-2 pl-3 pr-2 transition-colors ${
                     active ? 'bg-brand-soft' : 'hover:bg-subtle'}`}>
                   <div className="min-w-0 flex-1">
                     <p className={`truncate text-xs font-semibold ${active ? 'text-ink' : 'text-body'}`}>{job.title}</p>

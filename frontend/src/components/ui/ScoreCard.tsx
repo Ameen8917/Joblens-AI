@@ -1,11 +1,12 @@
+import { ReactNode } from 'react';
 import { ScoreBreakdown } from '../../types';
 
 interface Props { score: ScoreBreakdown; }
 
 const tone = (n: number) =>
-  n >= 75 ? { stroke: 'var(--good)', text: 'text-good', label: 'Excellent Match!', blurb: 'Your resume is a strong match for this job.' }
-  : n >= 50 ? { stroke: 'var(--warn)', text: 'text-warn', label: 'Moderate Match', blurb: 'You cover the core of this role, with some gaps to close.' }
-  : { stroke: 'var(--bad)', text: 'text-bad', label: 'Weak Match', blurb: 'This role asks for a lot your resume doesn’t show yet.' };
+  n >= 75 ? { stroke: 'stroke-good', text: 'text-good', label: 'Excellent Match!', blurb: 'Your resume is a strong match for this job.' }
+  : n >= 50 ? { stroke: 'stroke-warn', text: 'text-warn', label: 'Moderate Match', blurb: 'You cover the core of this role, with some gaps to close.' }
+  : { stroke: 'stroke-bad', text: 'text-bad', label: 'Weak Match', blurb: 'This role asks for a lot your resume doesn’t show yet.' };
 
 // The two scorers are independent signals; when they agree, the final score is more trustworthy.
 const confidence = (s: ScoreBreakdown) => {
@@ -15,19 +16,25 @@ const confidence = (s: ScoreBreakdown) => {
   return { label: 'Low Confidence', cls: 'bg-bad-soft text-bad' };
 };
 
-const Ring = ({ value, color }: { value: number; color: string }) => {
+export const Ring = ({ value, strokeClass, size = 'h-36 w-36', children }: {
+  value: number; strokeClass: string; size?: string; children?: ReactNode;
+}) => {
   const r = 52, c = 2 * Math.PI * r;
   return (
-    <div className="relative h-36 w-36 flex-shrink-0">
+    <div className={`relative flex-shrink-0 ${size}`}>
       <svg viewBox="0 0 128 128" className="h-full w-full -rotate-90">
-        <circle cx="64" cy="64" r={r} fill="none" stroke="var(--bg-subtle)" strokeWidth="10" />
-        <circle cx="64" cy="64" r={r} fill="none" stroke={color} strokeWidth="10" strokeLinecap="round"
+        <circle cx="64" cy="64" r={r} fill="none" strokeWidth="10" className="stroke-subtle" />
+        <circle cx="64" cy="64" r={r} fill="none" strokeWidth="10" strokeLinecap="round"
           strokeDasharray={c} strokeDashoffset={c * (1 - value / 100)}
-          className="animate-ring" style={{ ['--ring-circ' as string]: c }} />
+          className={`animate-ring ${strokeClass}`} style={{ ['--ring-circ' as string]: c }} />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-4xl font-extrabold leading-none text-ink">{value}</span>
-        <span className="mt-1 text-sm font-medium text-muted">/100</span>
+        {children ?? (
+          <>
+            <span className="text-4xl font-extrabold leading-none text-ink">{value}</span>
+            <span className="mt-1 text-sm font-medium text-muted">/100</span>
+          </>
+        )}
       </div>
     </div>
   );
@@ -53,7 +60,7 @@ export const ScoreCard = ({ score }: Props) => {
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px] animate-fade-up">
       <div className="card hero-wash flex flex-col items-center gap-6 p-6 sm:flex-row">
-        <Ring value={score.finalScore} color={t.stroke} />
+        <Ring value={score.finalScore} strokeClass={t.stroke} />
         <div className="text-center sm:text-left">
           <h2 className={`text-2xl font-extrabold ${t.text}`}>{t.label}</h2>
           <p className="mt-1 text-sm text-body">{t.blurb}</p>
@@ -69,7 +76,7 @@ export const ScoreCard = ({ score }: Props) => {
             hint="Embedding cosine similarity × 60% weight" />
           <Row label="Skills Match" value={Math.round(score.programmaticScore * 0.4)} max={40}
             hint="Deterministic required-skill coverage × 40% weight" />
-          <Row label="Required Skills" value={matched} max={total} />
+          <Row label="Exact Skill Matches" value={matched} max={total} />
           <div className="flex items-center justify-between pt-1 text-xs">
             <span className="text-body">Experience vs. requirement</span>
             <span className={`font-semibold ${delta >= 0 ? 'text-good' : 'text-warn'}`}>

@@ -4,43 +4,67 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Tokens are RGB channels so Tailwind opacity modifiers (bg-bad/15) work. */
 :root {
-  --bg-page:       #f6f8f7;
-  --bg-surface:    #ffffff;
-  --bg-subtle:     #f2f5f3;
-  --border:        #e6ebe8;
-  --text-primary:  #101828;
-  --text-secondary:#475467;
-  --text-muted:    #98a2b3;
-  --brand:         #16a34a;
-  --brand-dark:    #15803d;
-  --brand-soft:    #e9f7ee;
-  --brand-line:    #bfe5cc;
-  --good:          #16a34a;
-  --good-soft:     #ecfdf3;
-  --warn:          #f59e0b;
-  --warn-soft:     #fffaeb;
-  --bad:           #e5484d;
-  --bad-soft:      #fff1f1;
-  --info:          #2563eb;
-  --info-soft:     #eff4ff;
+  color-scheme: light;
+  --bg-page:        246 248 247;
+  --bg-surface:     255 255 255;
+  --bg-subtle:      242 245 243;
+  --border:         230 235 232;
+  --text-primary:   16 24 40;
+  --text-secondary: 71 84 103;
+  --text-muted:     152 162 179;
+  --brand:          22 163 74;
+  --brand-dark:     21 128 61;
+  --brand-soft:     233 247 238;
+  --brand-line:     191 229 204;
+  --good:           22 163 74;
+  --good-soft:      236 253 243;
+  --warn:           217 119 6;
+  --warn-soft:      255 250 235;
+  --bad:            229 72 77;
+  --bad-soft:       255 241 241;
+  --info:           37 99 235;
+  --info-soft:      239 244 255;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg-page:        12 17 15;
+  --bg-surface:     20 26 23;
+  --bg-subtle:      30 38 34;
+  --border:         43 52 47;
+  --text-primary:   236 241 238;
+  --text-secondary: 168 180 173;
+  --text-muted:     115 128 120;
+  --brand-dark:     74 222 128;
+  --brand-soft:     20 50 33;
+  --brand-line:     35 90 55;
+  --good:           74 222 128;
+  --good-soft:      20 50 33;
+  --warn:           251 191 36;
+  --warn-soft:      56 42 14;
+  --bad:            248 113 113;
+  --bad-soft:       60 24 26;
+  --info:           96 165 250;
+  --info-soft:      23 37 66;
 }
 
 html { scroll-behavior: smooth; }
 body {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
-  background-color: var(--bg-page);
-  color: var(--text-primary);
+  background-color: rgb(var(--bg-page));
+  color: rgb(var(--text-primary));
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #d7ded9; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--border)); border-radius: 4px; }
 
 @layer components {
   .card { @apply bg-surface border border-line rounded-2xl shadow-card; }
-  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-dark disabled:opacity-40 disabled:cursor-not-allowed; }
+  .btn-primary { @apply inline-flex items-center justify-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed; }
   .btn-secondary { @apply inline-flex items-center justify-center gap-2 rounded-lg border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition-colors hover:bg-subtle; }
   .eyebrow { @apply text-[13px] font-semibold text-ink; }
 }

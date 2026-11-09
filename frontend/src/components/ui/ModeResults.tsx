@@ -26,17 +26,17 @@ const Radar = ({ axes }: { axes: { label: string; value: number }[] }) => {
     <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto h-full max-h-64 w-full" role="img"
       aria-label={axes.map(a => `${a.label} ${a.value}`).join(', ')}>
       {[0.25, 0.5, 0.75, 1].map(f => (
-        <polygon key={f} points={poly(() => R * f)} fill="none" stroke="var(--border)" />
+        <polygon key={f} points={poly(() => R * f)} fill="none" className="stroke-line" />
       ))}
-      {axes.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={c} y1={c} x2={x} y2={y} stroke="var(--border)" />; })}
+      {axes.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={c} y1={c} x2={x} y2={y} className="stroke-line" />; })}
       <polygon points={poly(i => (R * Math.max(axes[i].value, 4)) / 100)}
-        fill="var(--brand)" fillOpacity="0.18" stroke="var(--brand)" strokeWidth="2" strokeLinejoin="round" />
+        className="fill-brand stroke-brand" fillOpacity="0.18" strokeWidth="2" strokeLinejoin="round" />
       {axes.map((a, i) => {
         const [x, y] = pt(i, R + 22);
         return (
-          <text key={a.label} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-[var(--text-primary)]" fontSize="11" fontWeight="600">
+          <text key={a.label} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-ink" fontSize="11" fontWeight="600">
             {a.label}
-            <tspan x={x} dy="13" fontWeight="500" className="fill-[var(--text-muted)]">{a.value}</tspan>
+            <tspan x={x} dy="13" fontWeight="500" className="fill-muted">{a.value}</tspan>
           </text>
         );
       })}
@@ -154,7 +154,7 @@ export const GapResult = ({ data, score }: { data: GapAnalysisData; score?: Scor
             <p className="eyebrow mb-3">Requirements Check</p>
             <div className="space-y-2">
               <Requirement label="Years of experience" met={score.yearsOfExperienceDelta >= 0} />
-              <Requirement label={`Required skills (${score.matchedSkills.length - score.missingRequired.length}/${score.matchedSkills.length})`}
+              <Requirement label={`Skills covered (${score.matchedSkills.length - score.missingRequired.length}/${score.matchedSkills.length})`}
                 met={score.missingRequired.length === 0} />
               <Requirement label="Semantic alignment" met={score.semanticScore >= 60} />
             </div>

@@ -80,3 +80,24 @@ export interface SavedJob {
   score: number | null;
   savedAt: string;
 }
+
+// ─── Result tabs that run on frontend previews until their backend exists ────
+export type PreviewMode = 'tailor' | 'mock';
+export type ResultTab = AnalysisMode | PreviewMode;
+
+export interface TailoringSuggestion {
+  id: string;
+  kind: 'add-skill' | 'headline' | 'reorder-skills' | 'quantify';
+  title: string;
+  detail: string;
+  skill?: string;
+  points: number;
+}
+
+export interface MockFeedback {
+  overall: number;
+  structure: number;
+  content: number;
+  relevance: number;
+  tips: string[];
+}

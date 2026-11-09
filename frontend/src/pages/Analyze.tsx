@@ -1,5 +1,6 @@
 import { useState, useCallback, ReactNode } from 'react';
-import { ArrowRight, Briefcase, CircleCheck, CircleX, FileText, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowRight, Briefcase, CircleCheck, CircleX, Clock, FileText, House, LoaderCircle, Moon, Plus, Settings as SettingsIcon, Sparkles, Sun } from 'lucide-react';
 import { parseJD, getJob } from '../api/jobs';
 import { parseResume, getResume } from '../api/resumes';
 import { analyze, scoreOnly } from '../api/analyze';
@@ -10,8 +11,13 @@ import { ResumeUpload } from '../components/ui/ResumeUpload';
 import { JDInput } from '../components/ui/JDInput';
 import { JobSidebar, Logo } from '../components/ui/JobSidebar';
 import { FitResult, GapResult, CoverLetterResult, InterviewResult } from '../components/ui/ModeResults';
+import { ResumeTailoring } from '../components/ui/ResumeTailoring';
+import { MockInterview } from '../components/ui/MockInterview';
+import HistoryPage from './History';
+import SettingsPage from './Settings';
+import { useSettings } from '../hooks/useSettings';
 import {
-  AnalysisMode, ParsedJD, ParsedResume, ScoreBreakdown,
+  ResultTab, ParsedJD, ParsedResume, ScoreBreakdown,
   FitAnalysisData, GapAnalysisData, CoverLetterData, InterviewPrepData,
   SavedJob,
 } from '../types';
@@ -47,7 +53,7 @@ const HeroArt = () => (
       </div>
     </div>
     <div className="absolute bottom-0 right-4 flex h-20 w-24 items-center justify-center rounded-2xl bg-ink shadow-lift">
-      <Briefcase className="h-9 w-9 text-white" strokeWidth={1.5} />
+      <Briefcase className="h-9 w-9 text-surface" strokeWidth={1.5} />
     </div>
     <CircleCheck className="absolute bottom-3 left-20 h-10 w-10 rounded-full bg-surface text-brand shadow-lift" strokeWidth={2.25} />
     <Sparkles className="absolute right-2 top-0 h-6 w-6 text-brand" />
@@ -76,7 +82,11 @@ export default function AnalyzePage() {
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [score,        setScore]        = useState<ScoreBreakdown | null>(null);
   const [scoreMs,      setScoreMs]      = useState<number | null>(null);
-  const [mode,         setMode]         = useState<AnalysisMode>('fit');
+  const { settings, update: updateSettings, dark } = useSettings();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const view = pathname === '/history' ? 'history' : pathname === '/settings' ? 'settings' : 'home';
+  const [mode,         setMode]         = useState<ResultTab>(settings.defaultTab);
   const [modeData,     setModeData]     = useState<Record<string, unknown>>({});
   const [jdLoading,      setJdLoading]      = useState(false);
   const [resumeLoading,  setResumeLoading]  = useState(false);
@@ -128,8 +138,9 @@ export default function AnalyzePage() {
     } catch (e) { handleError(e); } finally { setResumeLoading(false); }
   };
 
-  const handleMode = useCallback(async (m: AnalysisMode) => {
+  const handleMode = useCallback(async (m: ResultTab) => {
     setMode(m);
+    if (m === 'tailor' || m === 'mock') return; // frontend previews, no API call yet
     if (!jobId || !resumeId || modeData[m]) return;
     setAnalyzeLoading(true); setError(null);
     try {
@@ -141,10 +152,12 @@ export default function AnalyzePage() {
 
   const reset = () => {
     setJobId(null); setResumeId(null); setParsedJD(null); setParsedResume(null);
-    setScore(null); setScoreMs(null); setModeData({}); setError(null); setActiveJobId(undefined); setMode('fit');
+    setScore(null); setScoreMs(null); setModeData({}); setError(null); setActiveJobId(undefined); setMode(settings.defaultTab);
+    navigate('/');
   };
 
   const loadSavedJob = async (job: SavedJob) => {
+    navigate('/');
     setActiveJobId(job.id); setJobId(job.jobId); setResumeId(job.resumeId);
     setScore(null); setModeData({}); setError(null); setParsedJD(null); setParsedResume(null);
     try {
@@ -163,7 +176,10 @@ export default function AnalyzePage() {
     if (activeJobId === id) setActiveJobId(undefined);
   };
 
+  const clearHistory = () => { setSavedJobs([]); saveSaved([]); setActiveJobId(undefined); };
+
   const bothParsed = !!jobId && !!resumeId;
+  const isPreviewTab = mode === 'tailor' || mode === 'mock';
   const activeJob = savedJobs.find(j => j.id === activeJobId);
   const jobTitle = parsedJD?.title ?? activeJob?.title;
   const jobCompany = parsedJD?.company ?? activeJob?.company;
@@ -172,19 +188,30 @@ export default function AnalyzePage() {
     <div className="flex h-screen bg-page">
       <div className="hidden w-60 flex-shrink-0 border-r border-line bg-surface md:block">
         <JobSidebar jobs={savedJobs} activeId={activeJobId} onSelect={loadSavedJob} onDelete={deleteSaved}
-          onHome={reset} homeActive={!activeJobId} />
+          onHome={() => (view === 'home' ? reset() : navigate('/'))} homeActive={view === 'home' && !activeJobId} />
       </div>
 
       <main className="min-w-0 flex-1 overflow-y-auto">
         <header className="flex items-center justify-between px-4 pt-4 sm:px-8">
-          <div className="md:hidden"><Logo /></div>
+          <div className="flex items-center gap-3 md:hidden">
+            <Logo />
+            <nav className="flex items-center gap-2 text-body">
+              <Link to="/" aria-label="Home"><House className="h-4 w-4" /></Link>
+              <Link to="/history" aria-label="History"><Clock className="h-4 w-4" /></Link>
+              <Link to="/settings" aria-label="Settings"><SettingsIcon className="h-4 w-4" /></Link>
+            </nav>
+          </div>
           <div className="ml-auto flex items-center gap-3">
-            {bothParsed && (
+            {view === 'home' && bothParsed && (
               <button onClick={reset} className="btn-secondary px-3 py-1.5 text-xs"><Plus className="h-3.5 w-3.5" /> New analysis</button>
             )}
-            <span title={parsedResume?.name}
+            <button onClick={() => updateSettings({ theme: dark ? 'light' : 'dark' })} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
+              className="text-body transition-colors hover:text-ink">
+              {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </button>
+            <span title={settings.displayName || parsedResume?.name}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
-              {initials(parsedResume?.name)}
+              {initials(settings.displayName || parsedResume?.name)}
             </span>
           </div>
         </header>
@@ -192,6 +219,10 @@ export default function AnalyzePage() {
         <div className="mx-auto max-w-6xl space-y-5 px-4 pb-12 pt-4 sm:px-8">
           {error && <ErrorBanner msg={error} onDismiss={() => setError(null)} />}
 
+          {view === 'history' && <HistoryPage jobs={savedJobs} onOpen={loadSavedJob} onDelete={deleteSaved} />}
+          {view === 'settings' && <SettingsPage settings={settings} onChange={updateSettings} historyCount={savedJobs.length} onClearHistory={clearHistory} />}
+
+          {view === 'home' && <>
           {!score && !scoreLoading ? (
             <section className="card hero-wash overflow-hidden p-6 sm:p-10 animate-fade-up">
               <div className="flex items-start justify-between gap-6">
@@ -244,7 +275,13 @@ export default function AnalyzePage() {
             <section className="space-y-4 animate-fade-up">
               <ModeTabs active={mode} onChange={handleMode} loading={analyzeLoading} />
 
-              {!modeData[mode] && !analyzeLoading && (
+              {mode === 'tailor' && (parsedResume && parsedJD
+                ? <ResumeTailoring key={`${jobId}_${resumeId}`} resume={parsedResume} jd={parsedJD} score={score} />
+                : <div className="card px-6 py-10 text-center text-sm text-body">Resume details aren’t available for this saved job.</div>)}
+              {mode === 'mock' && <MockInterview key={`${jobId}_${resumeId}`} jd={parsedJD}
+                questions={(modeData.interview as InterviewPrepData | undefined)?.questions} />}
+
+              {!isPreviewTab && !modeData[mode] && !analyzeLoading && (
                 <div className="card flex flex-col items-center gap-3 px-6 py-10 text-center">
                   <Sparkles className="h-7 w-7 text-brand" />
                   <p className="text-sm text-body">Generate a {modeLabel(mode).toLowerCase()} for this job with Gemini.</p>
@@ -256,7 +293,7 @@ export default function AnalyzePage() {
 
               {analyzeLoading && <Spinner label={`Running ${modeLabel(mode).toLowerCase()}…`} />}
 
-              {!analyzeLoading && !!modeData[mode] && (
+              {!isPreviewTab && !analyzeLoading && !!modeData[mode] && (
                 <div key={mode}>
                   {mode === 'fit'          && <FitResult         data={modeData[mode] as FitAnalysisData} />}
                   {mode === 'gaps'         && <GapResult         data={modeData[mode] as GapAnalysisData} score={score} />}
@@ -266,6 +303,7 @@ export default function AnalyzePage() {
               )}
             </section>
           )}
+          </>}
         </div>
       </main>
     </div>

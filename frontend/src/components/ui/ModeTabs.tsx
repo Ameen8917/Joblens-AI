@@ -1,17 +1,19 @@
-import { AnalysisMode } from '../../types';
+import { ResultTab } from '../../types';
 
-const TABS: { id: AnalysisMode; label: string }[] = [
-  { id: 'fit',          label: 'Fit Analysis'   },
-  { id: 'gaps',         label: 'Gap Analysis'   },
-  { id: 'cover-letter', label: 'Cover Letter'   },
-  { id: 'interview',    label: 'Interview Prep' },
+export const TABS: { id: ResultTab; label: string }[] = [
+  { id: 'fit',          label: 'Fit Analysis'     },
+  { id: 'gaps',         label: 'Gap Analysis'     },
+  { id: 'tailor',       label: 'Resume Tailoring' },
+  { id: 'cover-letter', label: 'Cover Letter'     },
+  { id: 'interview',    label: 'Interview Prep'   },
+  { id: 'mock',         label: 'Mock Interview'   },
 ];
 
-export const modeLabel = (m: AnalysisMode) => TABS.find(t => t.id === m)!.label;
+export const modeLabel = (m: ResultTab) => TABS.find(t => t.id === m)!.label;
 
 interface Props {
-  active: AnalysisMode;
-  onChange: (mode: AnalysisMode) => void;
+  active: ResultTab;
+  onChange: (mode: ResultTab) => void;
   loading?: boolean;
 }
 
