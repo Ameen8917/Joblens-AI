@@ -1,13 +1,14 @@
-import { useState, useCallback } from 'react';
-import { parseJD } from '../api/jobs';
-import { parseResume } from '../api/resumes';
+import { useState, useCallback, ReactNode } from 'react';
+import { ArrowRight, Briefcase, CircleCheck, CircleX, FileText, LoaderCircle, Plus, Sparkles } from 'lucide-react';
+import { parseJD, getJob } from '../api/jobs';
+import { parseResume, getResume } from '../api/resumes';
 import { analyze, scoreOnly } from '../api/analyze';
 import { ScoreCard } from '../components/ui/ScoreCard';
 import { SkillGrid } from '../components/ui/SkillGrid';
-import { ModeTabs } from '../components/ui/ModeTabs';
+import { ModeTabs, modeLabel } from '../components/ui/ModeTabs';
 import { ResumeUpload } from '../components/ui/ResumeUpload';
 import { JDInput } from '../components/ui/JDInput';
-import { JobSidebar } from '../components/ui/JobSidebar';
+import { JobSidebar, Logo } from '../components/ui/JobSidebar';
 import { FitResult, GapResult, CoverLetterResult, InterviewResult } from '../components/ui/ModeResults';
 import {
   AnalysisMode, ParsedJD, ParsedResume, ScoreBreakdown,
@@ -17,22 +18,54 @@ import {
 
 const STORAGE_KEY = 'joblens_saved_jobs';
 const loadSaved = (): SavedJob[] => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]'); } catch { return []; } };
-const saveSaved = (j: SavedJob[]) => localStorage.setItem(STORAGE_KEY, JSON.stringify(j));
+const saveSaved = (j: SavedJob[]) => { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(j)); } catch { /* storage unavailable */ } };
+
+const initials = (name?: string) =>
+  (name || '').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || 'JL';
 
 const Spinner = ({ label }: { label: string }) => (
-  <div className="flex flex-col items-center justify-center gap-3 py-12">
-    <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
-      style={{ borderColor: 'var(--accent-amber)', borderTopColor: 'transparent' }} />
-    <p className="text-xs font-mono" style={{ color: 'var(--text-secondary)' }}>{label}</p>
+  <div className="card flex flex-col items-center justify-center gap-3 py-14">
+    <LoaderCircle className="h-8 w-8 animate-spin text-brand" />
+    <p className="text-sm text-body">{label}</p>
   </div>
 );
 
 const ErrorBanner = ({ msg, onDismiss }: { msg: string; onDismiss: () => void }) => (
-  <div className="glass-elevated rounded-xl px-4 py-3 flex items-center gap-3 animate-fade-up"
-    style={{ borderLeft: '3px solid var(--score-low)', background: 'rgba(239,68,68,0.07)' }}>
-    <span className="font-mono font-bold flex-shrink-0" style={{ color: 'var(--score-low)' }}>!</span>
-    <p className="text-sm flex-1" style={{ color: 'var(--score-low)' }}>{msg}</p>
-    <button onClick={onDismiss} className="font-mono text-lg leading-none" style={{ color: 'var(--text-muted)' }}>×</button>
+  <div role="alert" className="flex items-center gap-3 rounded-xl border border-bad/20 bg-bad-soft px-4 py-3 animate-fade-up">
+    <CircleX className="h-5 w-5 flex-shrink-0 text-bad" />
+    <p className="flex-1 text-sm text-bad">{msg}</p>
+    <button onClick={onDismiss} className="text-sm font-semibold text-bad/70 hover:text-bad">Dismiss</button>
+  </div>
+);
+
+const HeroArt = () => (
+  <div aria-hidden className="relative hidden h-36 w-48 flex-shrink-0 md:block">
+    <div className="absolute left-2 top-2 h-28 w-24 -rotate-6 rounded-xl border border-line bg-surface p-3 shadow-lift">
+      <FileText className="h-6 w-6 text-info" />
+      <div className="mt-3 space-y-1.5">
+        {[80, 100, 64, 90].map((w, i) => <div key={i} className="h-1.5 rounded bg-subtle" style={{ width: `${w}%` }} />)}
+      </div>
+    </div>
+    <div className="absolute bottom-0 right-4 flex h-20 w-24 items-center justify-center rounded-2xl bg-ink shadow-lift">
+      <Briefcase className="h-9 w-9 text-white" strokeWidth={1.5} />
+    </div>
+    <CircleCheck className="absolute bottom-3 left-20 h-10 w-10 rounded-full bg-surface text-brand shadow-lift" strokeWidth={2.25} />
+    <Sparkles className="absolute right-2 top-0 h-6 w-6 text-brand" />
+  </div>
+);
+
+const Step = ({ n, title, sub, done, children }: { n: number; title: string; sub: string; done: boolean; children: ReactNode }) => (
+  <div className="space-y-3">
+    <div className="flex items-center gap-3">
+      <span className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold ${done ? 'bg-brand text-white' : 'bg-brand-soft text-brand-dark'}`}>
+        {done ? <CircleCheck className="h-4 w-4" /> : n}
+      </span>
+      <div>
+        <p className="text-sm font-semibold text-ink">{title}</p>
+        <p className="text-xs text-muted">{sub}</p>
+      </div>
+    </div>
+    {children}
   </div>
 );
 
@@ -42,10 +75,12 @@ export default function AnalyzePage() {
   const [parsedJD,     setParsedJD]     = useState<ParsedJD | null>(null);
   const [parsedResume, setParsedResume] = useState<ParsedResume | null>(null);
   const [score,        setScore]        = useState<ScoreBreakdown | null>(null);
+  const [scoreMs,      setScoreMs]      = useState<number | null>(null);
   const [mode,         setMode]         = useState<AnalysisMode>('fit');
   const [modeData,     setModeData]     = useState<Record<string, unknown>>({});
   const [jdLoading,      setJdLoading]      = useState(false);
   const [resumeLoading,  setResumeLoading]  = useState(false);
+  const [scoreLoading,   setScoreLoading]   = useState(false);
   const [analyzeLoading, setAnalyzeLoading] = useState(false);
   const [error,        setError]        = useState<string | null>(null);
   const [savedJobs,    setSavedJobs]    = useState<SavedJob[]>(loadSaved);
@@ -53,10 +88,19 @@ export default function AnalyzePage() {
 
   const handleError = (e: unknown) => setError(e instanceof Error ? e.message : 'Something went wrong');
 
-  const runScore = useCallback(async (jId: string, rId: string, jd?: ParsedJD | null) => {
+  const timedScore = async (jId: string, rId: string) => {
+    setScoreLoading(true);
+    const t0 = performance.now();
     try {
       const s = await scoreOnly(jId, rId);
-      setScore(s);
+      setScore(s); setScoreMs(performance.now() - t0);
+      return s;
+    } finally { setScoreLoading(false); }
+  };
+
+  const runScore = useCallback(async (jId: string, rId: string, jd?: ParsedJD | null) => {
+    try {
+      const s = await timedScore(jId, rId);
       const effectiveJD = jd ?? parsedJD;
       if (effectiveJD) {
         const entry: SavedJob = { id: `${jId}_${rId}`, jobId: jId, resumeId: rId, title: effectiveJD.title, company: effectiveJD.company, score: s.finalScore, savedAt: new Date().toISOString() };
@@ -95,10 +139,23 @@ export default function AnalyzePage() {
     } catch (e) { handleError(e); } finally { setAnalyzeLoading(false); }
   }, [jobId, resumeId, modeData]);
 
+  const reset = () => {
+    setJobId(null); setResumeId(null); setParsedJD(null); setParsedResume(null);
+    setScore(null); setScoreMs(null); setModeData({}); setError(null); setActiveJobId(undefined); setMode('fit');
+  };
+
   const loadSavedJob = async (job: SavedJob) => {
     setActiveJobId(job.id); setJobId(job.jobId); setResumeId(job.resumeId);
     setScore(null); setModeData({}); setError(null); setParsedJD(null); setParsedResume(null);
-    try { const s = await scoreOnly(job.jobId, job.resumeId); setScore(s); } catch (e) { handleError(e); }
+    try {
+      const [, jd, resume] = await Promise.all([
+        timedScore(job.jobId, job.resumeId),
+        getJob(job.jobId).catch(() => null),
+        getResume(job.resumeId).catch(() => null),
+      ]);
+      if (jd) setParsedJD(jd.parsed);
+      if (resume) setParsedResume(resume.parsed);
+    } catch (e) { handleError(e); }
   };
 
   const deleteSaved = (id: string) => {
@@ -107,90 +164,110 @@ export default function AnalyzePage() {
   };
 
   const bothParsed = !!jobId && !!resumeId;
+  const activeJob = savedJobs.find(j => j.id === activeJobId);
+  const jobTitle = parsedJD?.title ?? activeJob?.title;
+  const jobCompany = parsedJD?.company ?? activeJob?.company;
 
   return (
-    <div className="min-h-screen dot-grid" style={{ background: 'var(--bg-base)' }}>
-      {/* Header */}
-      <header className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid var(--bg-border)' }}>
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center font-mono font-bold text-sm" style={{ background: 'var(--accent-amber)', color: '#0a0a0a' }}>JL</div>
-          <span className="font-bold tracking-tight text-lg">JobLens <span className="font-mono font-light text-sm" style={{ color: 'var(--accent-amber)' }}>AI</span></span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full animate-pulse-slow" style={{ background: 'var(--score-high)' }} />
-          <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>API connected</span>
-        </div>
-      </header>
-
-      <div className="flex" style={{ height: 'calc(100vh - 57px)' }}>
-        {/* Sidebar */}
-        <div className="w-56 flex-shrink-0 p-3 overflow-y-auto" style={{ borderRight: '1px solid var(--bg-border)' }}>
-          <JobSidebar jobs={savedJobs} activeId={activeJobId} onSelect={loadSavedJob} onDelete={deleteSaved} />
-        </div>
-
-        {/* Main */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto px-6 py-6 space-y-5">
-            {error && <ErrorBanner msg={error} onDismiss={() => setError(null)} />}
-
-            {/* Step 01 & 02 */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <p className="text-xs font-mono uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>01 · Job Description</p>
-                <JDInput onSubmit={handleJDSubmit} loading={jdLoading} parsed={!!parsedJD} title={parsedJD?.title} company={parsedJD?.company} />
-              </div>
-              <div className="space-y-2">
-                <p className="text-xs font-mono uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>02 · Resume</p>
-                <ResumeUpload onFile={handleResumeSubmit} loading={resumeLoading} parsed={!!parsedResume} name={parsedResume?.name} />
-              </div>
-            </div>
-
-            {/* Score + Skills grid */}
-            {score && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-up">
-                <ScoreCard score={score} />
-                <SkillGrid skills={score.matchedSkills} missingNiceToHave={score.missingNiceToHave} />
-              </div>
-            )}
-
-            {/* Step 03 - Modes */}
-            {bothParsed && (
-              <div className="space-y-4 animate-fade-up">
-                <p className="text-xs font-mono uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>03 · Analysis Mode</p>
-                <ModeTabs active={mode} onChange={handleMode} loading={analyzeLoading} />
-
-                {!modeData[mode] && !analyzeLoading && (
-                  <button onClick={() => handleMode(mode)}
-                    className="w-full py-3 rounded-xl text-sm font-semibold font-mono transition-all duration-200"
-                    style={{ background: 'rgba(245,158,11,0.1)', color: 'var(--accent-amber)', border: '1px solid rgba(245,158,11,0.25)' }}>
-                    Run {mode.replace('-', ' ').replace(/\b\w/g, c => c.toUpperCase())} →
-                  </button>
-                )}
-
-                {analyzeLoading && <Spinner label={`Running ${mode} analysis…`} />}
-
-                {(!analyzeLoading && !!modeData[mode]) && (
-                  <div className="animate-fade-up">
-                    {mode === 'fit'          && <FitResult         data={modeData[mode] as FitAnalysisData}   />}
-                    {mode === 'gaps'         && <GapResult         data={modeData[mode] as GapAnalysisData}   />}
-                    {mode === 'cover-letter' && <CoverLetterResult data={modeData[mode] as CoverLetterData}   />}
-                    {mode === 'interview'    && <InterviewResult   data={modeData[mode] as InterviewPrepData} />}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Empty state */}
-            {!bothParsed && !jdLoading && !resumeLoading && (
-              <div className="text-center py-12 animate-fade-up delay-200">
-                <p className="text-4xl mb-3 opacity-10">◎</p>
-                <p className="text-sm font-semibold" style={{ color: 'var(--text-secondary)' }}>Paste a JD and upload your resume to begin</p>
-                <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>Both are parsed with Gemini before scoring</p>
-              </div>
-            )}
-          </div>
-        </main>
+    <div className="flex h-screen bg-page">
+      <div className="hidden w-60 flex-shrink-0 border-r border-line bg-surface md:block">
+        <JobSidebar jobs={savedJobs} activeId={activeJobId} onSelect={loadSavedJob} onDelete={deleteSaved}
+          onHome={reset} homeActive={!activeJobId} />
       </div>
+
+      <main className="min-w-0 flex-1 overflow-y-auto">
+        <header className="flex items-center justify-between px-4 pt-4 sm:px-8">
+          <div className="md:hidden"><Logo /></div>
+          <div className="ml-auto flex items-center gap-3">
+            {bothParsed && (
+              <button onClick={reset} className="btn-secondary px-3 py-1.5 text-xs"><Plus className="h-3.5 w-3.5" /> New analysis</button>
+            )}
+            <span title={parsedResume?.name}
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-bold text-white">
+              {initials(parsedResume?.name)}
+            </span>
+          </div>
+        </header>
+
+        <div className="mx-auto max-w-6xl space-y-5 px-4 pb-12 pt-4 sm:px-8">
+          {error && <ErrorBanner msg={error} onDismiss={() => setError(null)} />}
+
+          {!score && !scoreLoading ? (
+            <section className="card hero-wash overflow-hidden p-6 sm:p-10 animate-fade-up">
+              <div className="flex items-start justify-between gap-6">
+                <div>
+                  <h1 className="text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">
+                    Find Your Perfect <span className="text-brand">Job Match</span>
+                  </h1>
+                  <p className="mt-3 max-w-md text-[15px] leading-relaxed text-body">
+                    Upload your resume and job description to get AI-powered analysis, scores and personalized insights.
+                  </p>
+                </div>
+                <HeroArt />
+              </div>
+              <div className="mt-8 grid gap-6 md:grid-cols-2">
+                <Step n={1} title="Upload Resume" sub="Your latest resume (PDF)" done={!!parsedResume}>
+                  <ResumeUpload onFile={handleResumeSubmit} loading={resumeLoading} parsed={!!parsedResume} name={parsedResume?.name} />
+                </Step>
+                <Step n={2} title="Add Job Description" sub="Paste the target job details" done={!!parsedJD}>
+                  <JDInput onSubmit={handleJDSubmit} loading={jdLoading} parsed={!!parsedJD} title={parsedJD?.title} company={parsedJD?.company} />
+                </Step>
+              </div>
+            </section>
+          ) : (
+            <section className="flex flex-wrap items-end justify-between gap-3 animate-fade-up">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted">Match report</p>
+                <h1 className="truncate text-2xl font-extrabold tracking-tight text-ink">{jobTitle ?? 'Saved analysis'}</h1>
+                {(jobCompany || parsedResume?.name) && (
+                  <p className="text-sm text-body">{[jobCompany, parsedResume?.name && `for ${parsedResume.name}`].filter(Boolean).join(' · ')}</p>
+                )}
+              </div>
+              {score && scoreMs !== null && (
+                <span className="flex items-center gap-1.5 text-xs text-body">
+                  Analysis completed · {(scoreMs / 1000).toFixed(1)}s <CircleCheck className="h-4 w-4 text-brand" />
+                </span>
+              )}
+            </section>
+          )}
+
+          {scoreLoading && <Spinner label="Scoring your resume against the job…" />}
+
+          {score && (
+            <>
+              <ScoreCard score={score} />
+              <SkillGrid skills={score.matchedSkills} missingNiceToHave={score.missingNiceToHave} />
+            </>
+          )}
+
+          {bothParsed && score && (
+            <section className="space-y-4 animate-fade-up">
+              <ModeTabs active={mode} onChange={handleMode} loading={analyzeLoading} />
+
+              {!modeData[mode] && !analyzeLoading && (
+                <div className="card flex flex-col items-center gap-3 px-6 py-10 text-center">
+                  <Sparkles className="h-7 w-7 text-brand" />
+                  <p className="text-sm text-body">Generate a {modeLabel(mode).toLowerCase()} for this job with Gemini.</p>
+                  <button onClick={() => handleMode(mode)} className="btn-primary">
+                    Run {modeLabel(mode)} <ArrowRight className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {analyzeLoading && <Spinner label={`Running ${modeLabel(mode).toLowerCase()}…`} />}
+
+              {!analyzeLoading && !!modeData[mode] && (
+                <div key={mode}>
+                  {mode === 'fit'          && <FitResult         data={modeData[mode] as FitAnalysisData} />}
+                  {mode === 'gaps'         && <GapResult         data={modeData[mode] as GapAnalysisData} score={score} />}
+                  {mode === 'cover-letter' && <CoverLetterResult data={modeData[mode] as CoverLetterData} />}
+                  {mode === 'interview'    && <InterviewResult   data={modeData[mode] as InterviewPrepData} />}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
+      </main>
     </div>
   );
 }

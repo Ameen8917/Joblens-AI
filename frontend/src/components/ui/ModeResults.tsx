@@ -1,123 +1,213 @@
 import { useState } from 'react';
-import { FitAnalysisData, GapAnalysisData, CoverLetterData, InterviewPrepData } from '../../types';
+import { Check, CircleAlert, CircleCheck, CircleX, Copy, Download, Lightbulb, Mail, TriangleAlert } from 'lucide-react';
+import { FitAnalysisData, GapAnalysisData, CoverLetterData, InterviewPrepData, ScoreBreakdown } from '../../types';
+
+const useCopy = () => {
+  const [copied, setCopied] = useState(false);
+  const copy = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return { copied, copy };
+};
+
 // ═══════════════════════════════════════════════════
 // FIT ANALYSIS
 // ═══════════════════════════════════════════════════
-export const FitResult = ({ data }: { data: FitAnalysisData }) => (
-  <div className="space-y-4 animate-fade-up">
-    {/* Verdict */}
-    <div className="glass-elevated rounded-xl px-5 py-4" style={{ borderLeft: '3px solid var(--accent-amber)' }}>
-      <p className="text-xs font-mono uppercase tracking-widest mb-1" style={{ color: 'var(--accent-amber)' }}>Verdict</p>
-      <p className="text-sm leading-relaxed" style={{ color: 'var(--text-primary)' }}>{data.verdict}</p>
-    </div>
+const Radar = ({ axes }: { axes: { label: string; value: number }[] }) => {
+  const size = 240, c = size / 2, R = 78;
+  const pt = (i: number, r: number) => {
+    const a = (Math.PI * 2 * i) / axes.length - Math.PI / 2;
+    return [c + Math.cos(a) * r, c + Math.sin(a) * r] as const;
+  };
+  const poly = (r: (i: number) => number) => axes.map((_, i) => pt(i, r(i)).join(',')).join(' ');
+  return (
+    <svg viewBox={`0 0 ${size} ${size}`} className="mx-auto h-full max-h-64 w-full" role="img"
+      aria-label={axes.map(a => `${a.label} ${a.value}`).join(', ')}>
+      {[0.25, 0.5, 0.75, 1].map(f => (
+        <polygon key={f} points={poly(() => R * f)} fill="none" stroke="var(--border)" />
+      ))}
+      {axes.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={c} y1={c} x2={x} y2={y} stroke="var(--border)" />; })}
+      <polygon points={poly(i => (R * Math.max(axes[i].value, 4)) / 100)}
+        fill="var(--brand)" fillOpacity="0.18" stroke="var(--brand)" strokeWidth="2" strokeLinejoin="round" />
+      {axes.map((a, i) => {
+        const [x, y] = pt(i, R + 22);
+        return (
+          <text key={a.label} x={x} y={y} textAnchor="middle" dominantBaseline="middle" className="fill-[var(--text-primary)]" fontSize="11" fontWeight="600">
+            {a.label}
+            <tspan x={x} dy="13" fontWeight="500" className="fill-[var(--text-muted)]">{a.value}</tspan>
+          </text>
+        );
+      })}
+    </svg>
+  );
+};
 
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-      {/* Strengths */}
-      <div className="glass-elevated rounded-xl p-5">
-        <p className="text-xs font-mono uppercase tracking-widest mb-3" style={{ color: 'var(--score-high)' }}>
-          ↑ Strengths
-        </p>
-        <ul className="space-y-2">
-          {data.strengths.map((s, i) => (
-            <li key={i} className="flex gap-2.5 text-sm animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
-              <span className="mt-0.5 flex-shrink-0 font-mono font-bold" style={{ color: 'var(--score-high)' }}>+</span>
-              <span style={{ color: 'var(--text-secondary)' }}>{s}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Gaps */}
-      <div className="glass-elevated rounded-xl p-5">
-        <p className="text-xs font-mono uppercase tracking-widest mb-3" style={{ color: 'var(--score-low)' }}>
-          ↓ Gaps
-        </p>
-        <ul className="space-y-2">
-          {data.gaps.map((g, i) => (
-            <li key={i} className="flex gap-2.5 text-sm animate-fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
-              <span className="mt-0.5 flex-shrink-0 font-mono font-bold" style={{ color: 'var(--score-low)' }}>−</span>
-              <span style={{ color: 'var(--text-secondary)' }}>{g}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  </div>
+const BulletList = ({ items, icon }: { items: string[]; icon: 'good' | 'warn' }) => (
+  <ul className="space-y-2">
+    {items.map((s, i) => (
+      <li key={i} className="flex gap-2.5 text-sm text-body animate-fade-up" style={{ animationDelay: `${i * 0.06}s` }}>
+        {icon === 'good'
+          ? <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-good" />
+          : <CircleAlert className="mt-0.5 h-4 w-4 flex-shrink-0 text-warn" />}
+        <span>{s}</span>
+      </li>
+    ))}
+  </ul>
 );
+
+export const FitResult = ({ data }: { data: FitAnalysisData }) => {
+  const s = data.scoreBreakdown;
+  const total = s.matchedSkills.length || 1;
+  const strict = Math.round((s.matchedSkills.filter(m => m.status === 'matched').length / total) * 100);
+  const exp = s.yearsOfExperienceDelta >= 0 ? 100 : Math.max(0, Math.round(100 + s.yearsOfExperienceDelta * 20));
+  const axes = [
+    { label: 'Skills', value: s.programmaticScore },
+    { label: 'Experience', value: exp },
+    { label: 'Semantic', value: s.semanticScore },
+    { label: 'Exact Match', value: strict },
+  ];
+
+  return (
+    <div className="space-y-4 animate-fade-up">
+      <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
+        <div className="card p-5">
+          <p className="eyebrow">Overall Fit</p>
+          <p className="mt-2 text-5xl font-extrabold text-brand">{s.finalScore}%</p>
+          <div className="mt-4 h-2 rounded-full bg-subtle">
+            <div className="h-full rounded-full bg-brand animate-bar" style={{ width: `${s.finalScore}%` }} />
+          </div>
+          <p className="mt-4 text-sm leading-relaxed text-body">{data.verdict}</p>
+        </div>
+        <div className="card flex items-center p-4">
+          <Radar axes={axes} />
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="rounded-2xl border border-line bg-good-soft/60 p-5">
+          <p className="eyebrow mb-3">Key Strengths</p>
+          <BulletList items={data.strengths} icon="good" />
+        </div>
+        <div className="rounded-2xl border border-bad/15 bg-bad-soft/70 p-5">
+          <p className="mb-3 text-[13px] font-semibold text-bad">Areas to Improve</p>
+          <BulletList items={data.gaps} icon="warn" />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════
 // GAP ANALYSIS
 // ═══════════════════════════════════════════════════
-const priorityConfig = {
-  high:   { color: 'var(--score-low)',   bg: 'rgba(239,68,68,0.08)',   border: 'rgba(239,68,68,0.25)',   label: 'HIGH'   },
-  medium: { color: 'var(--accent-amber)', bg: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.25)', label: 'MED'    },
-  low:    { color: 'var(--accent-blue)',  bg: 'rgba(59,130,246,0.08)',  border: 'rgba(59,130,246,0.25)', label: 'LOW'    },
-};
+const priority = {
+  high:   { label: 'High priority',   Icon: CircleX,       icon: 'text-bad',  box: 'border-bad/15 bg-bad-soft/50',   chip: 'text-bad'  },
+  medium: { label: 'Medium priority', Icon: TriangleAlert, icon: 'text-warn', box: 'border-warn/20 bg-warn-soft/60', chip: 'text-warn' },
+  low:    { label: 'Low priority',    Icon: CircleAlert,   icon: 'text-info', box: 'border-line bg-surface',         chip: 'text-info' },
+} as const;
 
-export const GapResult = ({ data }: { data: GapAnalysisData }) => (
-  <div className="space-y-3 animate-fade-up">
-    {data.gaps.map((gap, i) => {
-      const cfg = priorityConfig[gap.priority];
-      return (
-        <div key={i} className="glass-elevated rounded-xl p-5 animate-fade-up" style={{ animationDelay: `${i * 0.08}s` }}>
-          <div className="flex items-start gap-3 mb-3">
-            <span className="px-2 py-0.5 rounded text-xs font-mono font-bold flex-shrink-0 mt-0.5"
-              style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}>
-              {cfg.label}
-            </span>
-            <span className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{gap.skill}</span>
-          </div>
-          <p className="text-xs mb-2 leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{gap.reason}</p>
-          <div className="flex gap-2 items-start pt-3" style={{ borderTop: '1px solid var(--bg-border)' }}>
-            <span className="font-mono text-xs flex-shrink-0 pt-0.5" style={{ color: 'var(--accent-amber)' }}>→</span>
-            <p className="text-xs leading-relaxed" style={{ color: 'var(--accent-amber)' }}>{gap.suggestion}</p>
-          </div>
-        </div>
-      );
-    })}
+const Requirement = ({ label, met }: { label: string; met: boolean }) => (
+  <div className="flex items-center justify-between rounded-lg border border-line px-3 py-2.5 text-sm">
+    <span className="text-body">{label}</span>
+    <span className={`flex items-center gap-1 text-xs font-semibold ${met ? 'text-good' : 'text-bad'}`}>
+      {met ? <CircleCheck className="h-4 w-4" /> : <CircleX className="h-4 w-4" />}{met ? 'Met' : 'Not met'}
+    </span>
   </div>
 );
+
+export const GapResult = ({ data, score }: { data: GapAnalysisData; score?: ScoreBreakdown | null }) => {
+  const order = ['high', 'medium', 'low'] as const;
+  const sorted = [...data.gaps].sort((a, b) => order.indexOf(a.priority) - order.indexOf(b.priority));
+  const tip = sorted[0];
+
+  return (
+    <div className="space-y-4 animate-fade-up">
+      <div className={`grid gap-4 ${score ? 'lg:grid-cols-[1fr_300px]' : ''}`}>
+        <div className="space-y-3">
+          {sorted.length === 0 && (
+            <div className="card p-5 text-sm text-body">No meaningful gaps found for this role.</div>
+          )}
+          {sorted.map((gap, i) => {
+            const p = priority[gap.priority];
+            return (
+              <div key={i} className={`rounded-2xl border p-4 animate-fade-up ${p.box}`} style={{ animationDelay: `${i * 0.05}s` }}>
+                <div className="flex items-start gap-3">
+                  <p.Icon className={`mt-0.5 h-5 w-5 flex-shrink-0 ${p.icon}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <p className="text-sm font-bold text-ink">{gap.skill}</p>
+                      <span className={`text-xs font-semibold ${p.chip}`}>{p.label}</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-relaxed text-body">{gap.reason}</p>
+                    <p className="mt-2 text-xs font-medium leading-relaxed text-ink">→ {gap.suggestion}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {score && (
+          <div className="card h-fit p-5">
+            <p className="eyebrow mb-3">Requirements Check</p>
+            <div className="space-y-2">
+              <Requirement label="Years of experience" met={score.yearsOfExperienceDelta >= 0} />
+              <Requirement label={`Required skills (${score.matchedSkills.length - score.missingRequired.length}/${score.matchedSkills.length})`}
+                met={score.missingRequired.length === 0} />
+              <Requirement label="Semantic alignment" met={score.semanticScore >= 60} />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {tip && (
+        <div className="flex items-start gap-2.5 rounded-xl border border-info/15 bg-info-soft px-4 py-3 text-sm">
+          <Lightbulb className="mt-0.5 h-4 w-4 flex-shrink-0 text-warn" />
+          <p className="text-body"><span className="font-semibold text-ink">Tip:</span> {tip.suggestion}</p>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ═══════════════════════════════════════════════════
 // COVER LETTER
 // ═══════════════════════════════════════════════════
 export const CoverLetterResult = ({ data }: { data: CoverLetterData }) => {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopy();
+  const full = `Subject: ${data.subject}\n\n${data.body}`;
 
-  const copy = async () => {
-    await navigator.clipboard.writeText(`Subject: ${data.subject}\n\n${data.body}`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const download = () => {
+    const url = URL.createObjectURL(new Blob([full], { type: 'text/plain' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: 'cover-letter.txt' });
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
-    <div className="glass-elevated rounded-xl p-6 animate-fade-up space-y-4">
-      {/* Subject + meta */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-mono uppercase tracking-widest mb-1" style={{ color: 'var(--text-muted)' }}>Subject</p>
-          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>{data.subject}</p>
+    <div className="grid gap-4 animate-fade-up lg:grid-cols-[260px_1fr]">
+      <div className="card flex h-fit flex-col items-center p-6 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-soft">
+          <Mail className="h-8 w-8 text-brand" />
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
-          <span className="text-xs font-mono px-2 py-1 rounded" style={{ background: 'var(--bg-border)', color: 'var(--text-secondary)' }}>
-            {data.wordCount} words
-          </span>
-          <button onClick={copy}
-            className="text-xs font-mono px-3 py-1.5 rounded-lg transition-all duration-200 font-semibold"
-            style={{ background: copied ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.12)',
-                     color: copied ? 'var(--score-high)' : 'var(--accent-amber)',
-                     border: `1px solid ${copied ? 'rgba(34,197,94,0.3)' : 'rgba(245,158,11,0.3)'}` }}>
-            {copied ? '✓ Copied' : '⎘ Copy'}
+        <p className="mt-4 text-base font-bold text-ink">Your cover letter is ready!</p>
+        <p className="mt-1 text-xs leading-relaxed text-body">Personalized from your resume and the job description · {data.wordCount} words</p>
+        <div className="mt-5 flex w-full flex-col gap-2">
+          <button onClick={download} className="btn-primary w-full"><Download className="h-4 w-4" /> Download .txt</button>
+          <button onClick={() => copy(full)} className="btn-secondary w-full">
+            {copied ? <><Check className="h-4 w-4 text-good" /> Copied</> : <><Copy className="h-4 w-4" /> Copy Text</>}
           </button>
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid var(--bg-border)' }} />
-
-      {/* Body */}
-      <div className="text-sm leading-8 whitespace-pre-wrap" style={{ color: 'var(--text-secondary)' }}>
-        {data.body}
-      </div>
+      <article className="rounded-2xl border border-line bg-surface p-8 shadow-lift">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted">Subject</p>
+        <p className="mt-1 text-sm font-semibold text-ink">{data.subject}</p>
+        <div className="my-5 border-t border-line" />
+        <div className="whitespace-pre-wrap text-sm leading-7 text-body">{data.body}</div>
+      </article>
     </div>
   );
 };
@@ -125,52 +215,58 @@ export const CoverLetterResult = ({ data }: { data: CoverLetterData }) => {
 // ═══════════════════════════════════════════════════
 // INTERVIEW PREP
 // ═══════════════════════════════════════════════════
-const typeConfig = {
-  behavioral:    { color: 'var(--accent-blue)',  label: 'Behavioral'    },
-  technical:     { color: 'var(--accent-amber)', label: 'Technical'     },
-  'role-specific': { color: 'var(--accent-coral)', label: 'Role-Specific' },
+const typeChip = {
+  behavioral:      'bg-info-soft text-info',
+  technical:       'bg-brand-soft text-brand-dark',
+  'role-specific': 'bg-warn-soft text-warn',
 };
 
 export const InterviewResult = ({ data }: { data: InterviewPrepData }) => {
-  const [open, setOpen] = useState<number | null>(0);
+  const [sel, setSel] = useState(0);
+  const { copied, copy } = useCopy();
+  const q = data.questions[sel];
 
   return (
-    <div className="space-y-2 animate-fade-up">
-      {data.questions.map((q, i) => {
-        const cfg = typeConfig[q.type];
-        const isOpen = open === i;
-        return (
-          <div key={i} className="glass-elevated rounded-xl overflow-hidden animate-fade-up"
-            style={{ animationDelay: `${i * 0.06}s` }}>
-            <button className="w-full flex items-center gap-3 p-4 text-left transition-colors duration-150"
-              style={{ background: isOpen ? 'rgba(245,158,11,0.04)' : 'transparent' }}
-              onClick={() => setOpen(isOpen ? null : i)}>
-              <span className="text-xs font-mono px-2 py-0.5 rounded flex-shrink-0"
-                style={{ background: `${cfg.color}18`, color: cfg.color, border: `1px solid ${cfg.color}40` }}>
-                {cfg.label}
-              </span>
-              <span className="text-sm flex-1 font-medium" style={{ color: 'var(--text-primary)' }}>{q.question}</span>
-              <span className="font-mono flex-shrink-0" style={{ color: 'var(--text-muted)' }}>{isOpen ? '−' : '+'}</span>
-            </button>
+    <div className="grid gap-4 animate-fade-up lg:grid-cols-[1fr_1fr]">
+      <div className="card p-5">
+        <p className="eyebrow mb-3">Top Interview Questions</p>
+        <ol className="space-y-1">
+          {data.questions.map((item, i) => (
+            <li key={i}>
+              <button onClick={() => setSel(i)}
+                className={`flex w-full items-start gap-3 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                  i === sel ? 'bg-brand-soft' : 'hover:bg-subtle'}`}>
+                <span className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
+                  i === sel ? 'bg-brand text-white' : 'bg-subtle text-body'}`}>{i + 1}</span>
+                <span className={`text-sm ${i === sel ? 'font-semibold text-ink' : 'text-body'}`}>{item.question}</span>
+              </button>
+            </li>
+          ))}
+        </ol>
+      </div>
 
-            {isOpen && (
-              <div className="px-4 pb-4" style={{ borderTop: '1px solid var(--bg-border)' }}>
-                <p className="text-xs font-mono uppercase tracking-widest mt-3 mb-2" style={{ color: 'var(--accent-amber)' }}>
-                  Answer Framework
-                </p>
-                <ul className="space-y-1.5">
-                  {q.answerFramework.map((tip, j) => (
-                    <li key={j} className="flex gap-2.5 text-xs animate-fade-up" style={{ animationDelay: `${j * 0.05}s` }}>
-                      <span className="font-mono font-bold mt-0.5 flex-shrink-0" style={{ color: 'var(--accent-amber)' }}>›</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+      {q && (
+        <div className="card h-fit p-5 lg:sticky lg:top-4">
+          <div className="flex items-center justify-between">
+            <p className="eyebrow">Answer Framework</p>
+            <span className={`rounded-md px-2 py-0.5 text-[11px] font-semibold capitalize ${typeChip[q.type]}`}>{q.type.replace('-', ' ')}</span>
           </div>
-        );
-      })}
+          <div className="mt-3 rounded-xl bg-subtle p-4">
+            <p className="text-sm font-bold text-ink">{q.question}</p>
+            <ul className="mt-3 space-y-2">
+              {q.answerFramework.map((tip, j) => (
+                <li key={j} className="flex gap-2.5 text-sm text-body">
+                  <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand" />{tip}
+                </li>
+              ))}
+            </ul>
+          </div>
+          <button onClick={() => copy(`${q.question}\n\n${q.answerFramework.map(t => `- ${t}`).join('\n')}`)}
+            className="btn-secondary mt-4">
+            {copied ? <><Check className="h-4 w-4 text-good" /> Copied</> : <><Copy className="h-4 w-4" /> Copy Answer</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 };

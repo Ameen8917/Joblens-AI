@@ -1,12 +1,13 @@
 import { AnalysisMode } from '../../types';
 
-interface Tab { id: AnalysisMode; label: string; icon: string; desc: string; }
-const TABS: Tab[] = [
-  { id: 'fit',           label: 'Fit Analysis',   icon: '◎', desc: 'Score + strengths & gaps'  },
-  { id: 'gaps',          label: 'Gap Analysis',   icon: '△', desc: 'Missing skills with fixes'  },
-  { id: 'cover-letter',  label: 'Cover Letter',   icon: '✦', desc: 'Tailored to JD & resume'   },
-  { id: 'interview',     label: 'Interview Prep', icon: '⬡', desc: '9 questions with frameworks' },
+const TABS: { id: AnalysisMode; label: string }[] = [
+  { id: 'fit',          label: 'Fit Analysis'   },
+  { id: 'gaps',         label: 'Gap Analysis'   },
+  { id: 'cover-letter', label: 'Cover Letter'   },
+  { id: 'interview',    label: 'Interview Prep' },
 ];
+
+export const modeLabel = (m: AnalysisMode) => TABS.find(t => t.id === m)!.label;
 
 interface Props {
   active: AnalysisMode;
@@ -15,27 +16,15 @@ interface Props {
 }
 
 export const ModeTabs = ({ active, onChange, loading }: Props) => (
-  <div className="grid grid-cols-4 gap-2">
+  <div role="tablist" className="flex gap-1 overflow-x-auto border-b border-line">
     {TABS.map(tab => {
-      const isActive = tab.id === active;
+      const on = tab.id === active;
       return (
-        <button key={tab.id} onClick={() => !loading && onChange(tab.id)} disabled={loading}
-          className="relative glass-elevated rounded-xl px-3 py-3 text-left transition-all duration-200 group disabled:opacity-50"
-          style={isActive ? { borderColor: 'var(--accent-amber)', background: 'rgba(245,158,11,0.06)' } : undefined}>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="font-mono text-base" style={{ color: isActive ? 'var(--accent-amber)' : 'var(--text-muted)' }}>
-              {tab.icon}
-            </span>
-            <span className="text-xs font-semibold truncate" style={{ color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-              {tab.label}
-            </span>
-          </div>
-          <p className="text-xs font-mono leading-relaxed hidden sm:block" style={{ color: 'var(--text-muted)' }}>
-            {tab.desc}
-          </p>
-          {isActive && (
-            <div className="absolute bottom-0 left-4 right-4 h-0.5 rounded-full" style={{ background: 'var(--accent-amber)' }} />
-          )}
+        <button key={tab.id} role="tab" aria-selected={on}
+          onClick={() => !loading && onChange(tab.id)} disabled={loading && !on}
+          className={`-mb-px whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition-colors disabled:opacity-50 ${
+            on ? 'border-brand text-brand-dark' : 'border-transparent text-body hover:text-ink'}`}>
+          {tab.label}
         </button>
       );
     })}
