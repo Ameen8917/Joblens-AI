@@ -13,6 +13,12 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 - **Semantic score (60%)** — vector embeddings via `gemini-embedding-001` + cosine similarity to catch conceptual matches keyword search misses
 - Single weighted final score (0–100) with a full breakdown
 
+### Evidence-Backed Results
+- **Quoted proof** — each matched skill is linked to the resume line that shows it
+- **Quote verification** — Gemini cites the lines, but the backend confirms each one against text extracted from the PDF itself. A quote that can't be found is never shown
+- **Demonstrated vs. listed** — skills used in work or a project are separated from skills that are only named
+- **Requirement checks** — rule-based results for experience, seniority, location, visa and education, which can also report that the resume doesn't say
+
 ### Four AI Analysis Modes
 | Mode | Output |
 |------|--------|
@@ -64,6 +70,7 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | Database | MongoDB Atlas |
 | AI Model | Google Gemini 2.5 Flash (also reads the PDF) |
 | Embeddings | gemini-embedding-001 |
+| PDF Text | unpdf (independent text used to verify quotes) |
 | Validation | Zod |
 | File Upload | Multer |
 | Tests | Vitest |
@@ -91,10 +98,12 @@ joblens-ai/
 │   │   │   └── gemini.ts          # Gemini structured output + embeddings
 │   │   ├── models/
 │   │   │   ├── Job.ts             # Job schema (raw + parsed JSON + embedding)
-│   │   │   └── Resume.ts          # Resume schema (parsed JSON + embedding)
+│   │   │   └── Resume.ts          # Resume schema (PDF text + parsed JSON + embedding)
 │   │   ├── services/
 │   │   │   ├── jdParser.ts        # JD text → Gemini → structured JSON, deduplicated
 │   │   │   ├── resumeParser.ts    # PDF → Gemini → structured JSON
+│   │   │   ├── evidence.ts        # Verifies quotes against the PDF text and grades them
+│   │   │   ├── hardChecks.ts      # Experience, seniority, location, visa, education rules
 │   │   │   ├── scorer.ts          # Hybrid scoring engine (cosine + programmatic)
 │   │   │   └── modePrompts.ts     # 4 mode-specific Gemini prompts
 │   │   ├── routes/
@@ -104,7 +113,7 @@ joblens-ai/
 │   │   ├── middleware/
 │   │   │   ├── upload.ts          # Multer PDF config (5MB, memory storage)
 │   │   │   └── errorHandler.ts    # Global error handler + asyncHandler wrapper
-│   │   ├── utils/                 # Retries, structured output, Zod → Gemini schema
+│   │   ├── utils/                 # Retries, structured output, Zod → Gemini schema, PDF text
 │   │   ├── types/index.ts         # All shared TypeScript interfaces
 │   │   ├── app.ts                 # Express app setup + CORS + routes
 │   │   └── server.ts              # Entry point — DB + Gemini init + listen
@@ -123,7 +132,8 @@ joblens-ai/
     │   │   └── preview.ts         # Browser stand-ins for tailoring and mock interview
     │   ├── components/ui/
     │   │   ├── ScoreCard.tsx      # Score circle + semantic/programmatic bars
-    │   │   ├── SkillGrid.tsx      # ✓ matched / ~ partial / ✗ missing pills
+    │   │   ├── SkillGrid.tsx      # Matched / partial / missing pills + skill evidence
+    │   │   ├── HardChecks.tsx     # Requirement check results
     │   │   ├── ModeTabs.tsx       # 6-tab switcher
     │   │   ├── ModeResults.tsx    # FitResult, GapResult, CoverLetterResult, InterviewResult
     │   │   ├── ResumeTailoring.tsx # Tailoring preview
@@ -326,12 +336,12 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 - **No auth** — there are no user accounts, so anyone with a resume ID can read that stored resume. Saved jobs live in browser localStorage
 - **Semantic score runs high** — similarity is remapped from [-1, 1], and real embeddings rarely score near the bottom of that range. Recalibrating it is on the roadmap
 - **Resume Tailoring and Mock Interview** are rule-based previews, not yet AI-backed
+- **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. Multi-column layouts can also cause real lines to go unconfirmed
 
 ---
 
 ## ✦ Roadmap
 
-- [ ] Evidence-backed scoring: link each skill to the resume line that proves it
 - [ ] Quality test suite with expected results, and a recalibrated semantic score
 - [ ] AI-backed resume tailoring with accept and reject controls
 - [ ] Live mock interview with streamed follow-up questions

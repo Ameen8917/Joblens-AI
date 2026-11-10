@@ -15,8 +15,11 @@ const ResumeSchema = new Schema<IResume>(
     parsed: {
       name: { type: String, default: "" },
       email: { type: String, default: "" },
+      location: { type: String, default: "" },
+      workAuthorization: { type: String, default: "" },
       skills: [String],
       tools: [String],
+      skillEvidence: [{ skill: String, quote: String, section: String, level: String }],
       yearsOfExperience: { type: Number, default: 0 },
       experienceByDomain: [{ domain: String, years: Number }],
       education: [{ degree: String, field: String, institution: String }],

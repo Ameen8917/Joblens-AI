@@ -24,9 +24,20 @@ export interface ParsedResume {
 }
 
 // ─── Scoring ──────────────────────────────────────────────────────────────────
+export type EvidenceLevel = 'demonstrated' | 'listed' | 'unverified';
+
 export interface SkillMatch {
   skill: string;
   status: 'matched' | 'missing' | 'partial';
+  evidence: EvidenceLevel | null;
+  quote: string | null;
+}
+
+export interface HardCheck {
+  id: 'experience' | 'seniority' | 'location' | 'visa' | 'education';
+  label: string;
+  status: 'pass' | 'warn' | 'fail' | 'unknown' | 'not_required';
+  detail: string;
 }
 
 export interface ScoreBreakdown {
@@ -37,6 +48,7 @@ export interface ScoreBreakdown {
   missingRequired: string[];
   missingNiceToHave: string[];
   yearsOfExperienceDelta: number;
+  hardChecks: HardCheck[];
 }
 
 // ─── Mode outputs ─────────────────────────────────────────────────────────────

@@ -4,9 +4,26 @@ import { ScoreBreakdown } from '../../types';
 interface Props { score: ScoreBreakdown; }
 
 const tone = (n: number) =>
-  n >= 75 ? { stroke: 'stroke-good', text: 'text-good', label: 'Excellent Match!', blurb: 'Your resume is a strong match for this job.' }
-  : n >= 50 ? { stroke: 'stroke-warn', text: 'text-warn', label: 'Moderate Match', blurb: 'You cover the core of this role, with some gaps to close.' }
-  : { stroke: 'stroke-bad', text: 'text-bad', label: 'Weak Match', blurb: 'This role asks for a lot your resume doesn’t show yet.' };
+  n >= 75 ? { stroke: 'stroke-good', text: 'text-good', label: 'Excellent Match!', blurb: 'Your resume is a strong match for this job.', fit: 'A strong fit on paper, but' }
+  : n >= 50 ? { stroke: 'stroke-warn', text: 'text-warn', label: 'Moderate Match', blurb: 'You cover the core of this role, with some gaps to close.', fit: 'A moderate fit on paper, but' }
+  : { stroke: 'stroke-bad', text: 'text-bad', label: 'Weak Match', blurb: 'This role asks for a lot your resume doesn’t show yet.', fit: 'A weak fit, and' };
+
+const joinNames = (names: string[]) =>
+  names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+
+// The score measures fit, not eligibility, so a failed check changes the headline and leaves the number alone.
+const headline = (s: ScoreBreakdown) => {
+  const t = tone(s.finalScore);
+  const failed = s.hardChecks.filter(c => c.status === 'fail').map(c => c.label.toLowerCase());
+  if (failed.length === 0) return t;
+  const one = failed.length === 1;
+  return {
+    ...t,
+    text: 'text-bad',
+    label: one ? 'Requirement Not Met' : `${failed.length} Requirements Not Met`,
+    blurb: `${t.fit} your resume doesn’t meet the job’s ${joinNames(failed)} ${one ? 'requirement' : 'requirements'}. See the checks below.`,
+  };
+};
 
 // The two scorers are independent signals; when they agree, the final score is more trustworthy.
 const confidence = (s: ScoreBreakdown) => {
@@ -51,7 +68,7 @@ const Row = ({ label, value, max, hint }: { label: string; value: number; max: n
 );
 
 export const ScoreCard = ({ score }: Props) => {
-  const t = tone(score.finalScore);
+  const t = headline(score);
   const conf = confidence(score);
   const total = score.matchedSkills.length;
   const matched = score.matchedSkills.filter(s => s.status === 'matched').length;

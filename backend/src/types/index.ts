@@ -1,22 +1,47 @@
+export type Seniority = "intern" | "junior" | "mid" | "senior" | "staff" | "unknown";
+export type EducationLevel = "none" | "high_school" | "associate" | "bachelor" | "master" | "phd";
+
 export interface ParsedJD {
   title: string;
   company: string;
   roleType: "IC" | "Manager" | "Lead" | "Unknown";
+  seniority: Seniority;
+  workMode: "remote" | "hybrid" | "onsite" | "unknown";
+  locations: string[];
+  visaSponsorship: "offered" | "not_offered" | "unknown";
+  workAuthorizationRequired: string;
   requiredSkills: string[];
   niceToHaveSkills: string[];
   yearsOfExperience: number;
   educationRequired: string;
+  educationLevel: EducationLevel;
+  educationEquivalentAccepted: boolean;
   tools: string[];
   culturalSignals: string[];
   responsibilities: string[];
   rawText: string;
 }
 
+export type EvidenceSection = "experience" | "project" | "education" | "skills_list" | "summary" | "other";
+
+/** demonstrated: a confirmed line from work or a project. listed: confirmed, but only named. unverified: no confirmed line. */
+export type EvidenceLevel = "demonstrated" | "listed" | "unverified";
+
+export interface SkillEvidence {
+  skill: string;
+  quote: string;
+  section: EvidenceSection;
+  level: EvidenceLevel;
+}
+
 export interface ParsedResume {
   name: string;
   email: string;
+  location: string;
+  workAuthorization: string;
   skills: string[];
   tools: string[];
+  skillEvidence: SkillEvidence[];
   yearsOfExperience: number;
   experienceByDomain: { domain: string; years: number }[];
   education: { degree: string; field: string; institution: string }[];
@@ -28,6 +53,17 @@ export interface ParsedResume {
 export interface SkillMatch {
   skill: string;
   status: "matched" | "missing" | "partial";
+  /** Null for missing skills, which have nothing on the resume to grade. */
+  evidence: EvidenceLevel | null;
+  /** The confirmed resume line. Null unless the line was found in the PDF text. */
+  quote: string | null;
+}
+
+export interface HardCheck {
+  id: "experience" | "seniority" | "location" | "visa" | "education";
+  label: string;
+  status: "pass" | "warn" | "fail" | "unknown" | "not_required";
+  detail: string;
 }
 
 export interface ScoreBreakdown {
@@ -38,6 +74,7 @@ export interface ScoreBreakdown {
   missingRequired: string[];
   missingNiceToHave: string[];
   yearsOfExperienceDelta: number;
+  hardChecks: HardCheck[];
 }
 
 export interface FitAnalysisOutput {

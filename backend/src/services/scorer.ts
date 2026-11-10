@@ -1,4 +1,5 @@
-import { ParsedJD, ParsedResume, ScoreBreakdown, SkillMatch } from "../types";
+import { EvidenceLevel, ParsedJD, ParsedResume, ScoreBreakdown, SkillEvidence, SkillMatch } from "../types";
+import { runHardChecks } from "./hardChecks";
 
 const cosineSimilarity = (a: number[], b: number[]): number => {
   const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
@@ -55,10 +56,34 @@ export const skillsMatch = (jdSkill: string, resumeSkill: string): "matched" | "
   return null;
 };
 
+const MAX_SKILL_WORDS = 4;
+
+/** Whether a line names the skill, including by alias, as a whole word or phrase. */
+export const mentionsSkill = (line: string, skill: string): boolean => {
+  const words = line.toLowerCase().replace(/[^a-z0-9+#.]/g, " ").split(/\s+/).map(w => w.replace(/\.+$/, "")).filter(Boolean);
+  for (let length = 1; length <= MAX_SKILL_WORDS; length++) {
+    for (let start = 0; start + length <= words.length; start++) {
+      if (skillsMatch(skill, words.slice(start, start + length).join(" ")) === "matched") return true;
+    }
+  }
+  return false;
+};
+
+const EVIDENCE_RANK: Record<EvidenceLevel, number> = { demonstrated: 2, listed: 1, unverified: 0 };
+
+const strongestEvidence = (jdSkill: string, status: "matched" | "partial", evidence: SkillEvidence[]): Pick<SkillMatch, "evidence" | "quote"> => {
+  const best = evidence
+    .filter(item => skillsMatch(jdSkill, item.skill) === status)
+    .sort((a, b) => EVIDENCE_RANK[b.level] - EVIDENCE_RANK[a.level])[0];
+  if (!best || best.level === "unverified") return { evidence: "unverified", quote: null };
+  return { evidence: best.level, quote: best.quote };
+};
+
 export const computeScore = (
   jd: ParsedJD, resume: ParsedResume, jdEmbedding: number[], resumeEmbedding: number[]
 ): ScoreBreakdown => {
   const candidateSkills = [...resume.skills, ...resume.tools];
+  const skillEvidence = resume.skillEvidence ?? [];
   const matchedSkills: SkillMatch[] = [];
   const missingRequired: string[] = [];
   const missingNiceToHave: string[] = [];
@@ -70,7 +95,9 @@ export const computeScore = (
       if (m === "matched") { best = "matched"; break; }
       if (m === "partial" && best == null) best = "partial";
     }
-    matchedSkills.push({ skill: jdSkill, status: best ?? "missing" });
+    matchedSkills.push(best
+      ? { skill: jdSkill, status: best, ...strongestEvidence(jdSkill, best, skillEvidence) }
+      : { skill: jdSkill, status: "missing", evidence: null, quote: null });
     if (!best) missingRequired.push(jdSkill);
   }
 
@@ -91,5 +118,6 @@ export const computeScore = (
     programmaticScore, semanticScore, finalScore, matchedSkills,
     missingRequired, missingNiceToHave,
     yearsOfExperienceDelta: Math.round((resume.yearsOfExperience - jd.yearsOfExperience) * 10) / 10,
+    hardChecks: runHardChecks(jd, resume),
   };
 };

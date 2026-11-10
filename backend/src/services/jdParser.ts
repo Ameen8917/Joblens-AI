@@ -9,10 +9,17 @@ export const ParsedJDSchema = z.object({
   title: z.string().default("Unknown"),
   company: z.string().describe("Company name, or Unknown").default("Unknown"),
   roleType: z.enum(["IC", "Manager", "Lead", "Unknown"]).default("Unknown"),
+  seniority: z.enum(["intern", "junior", "mid", "senior", "staff", "unknown"]).describe("Level the job states. Use staff for staff, principal and lead roles. Use unknown if not stated").default("unknown"),
+  workMode: z.enum(["remote", "hybrid", "onsite", "unknown"]).default("unknown"),
+  locations: z.array(z.string()).describe("Where the job is based or where remote candidates must live, as written. Empty if unrestricted").default([]),
+  visaSponsorship: z.enum(["offered", "not_offered", "unknown"]).describe("Use unknown unless the job explicitly says").default("unknown"),
+  workAuthorizationRequired: z.string().describe("Citizenship, clearance or work-authorization requirement as written, or empty string").default(""),
   requiredSkills: z.array(z.string()).describe("Must-have skills, lowercase").default([]),
   niceToHaveSkills: z.array(z.string()).describe("Nice-to-have skills, lowercase").default([]),
   yearsOfExperience: z.number().describe("Minimum years required, or 0 if not stated").default(0),
   educationRequired: z.string().describe("Degree requirement, or empty string").default(""),
+  educationLevel: z.enum(["none", "high_school", "associate", "bachelor", "master", "phd"]).describe("Minimum degree required. Use none if it's not required or only preferred").default("none"),
+  educationEquivalentAccepted: z.boolean().describe("True if the job accepts equivalent experience instead of the degree").default(false),
   tools: z.array(z.string()).describe("Specific tools and software, lowercase").default([]),
   culturalSignals: z.array(z.string()).describe("Culture and soft-skill signals").default([]),
   responsibilities: z.array(z.string()).describe("3-6 key responsibilities as action-verb phrases").default([]),
@@ -26,9 +33,12 @@ ${rawText}
 
 const MONGO_DUPLICATE_KEY = 11000;
 
+// Raise this when the parsed format changes, so stored jobs missing the new fields are parsed again.
+const PARSE_VERSION = 2;
+
 /** Ignores whitespace differences, so pasting the same job again counts as the same job. */
 export const hashJobText = (rawText: string): string =>
-  createHash("sha256").update(rawText.replace(/\s+/g, " ").trim()).digest("hex");
+  createHash("sha256").update(`v${PARSE_VERSION}:${rawText.replace(/\s+/g, " ").trim()}`).digest("hex");
 
 const toResult = (job: IJob): { jobId: string; parsed: ParsedJD } => ({ jobId: String(job._id), parsed: job.parsed });
 

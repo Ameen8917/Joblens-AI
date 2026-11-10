@@ -6,6 +6,7 @@ import { parseResume, getResume } from '../api/resumes';
 import { analyze, scoreOnly } from '../api/analyze';
 import { ScoreCard } from '../components/ui/ScoreCard';
 import { SkillGrid } from '../components/ui/SkillGrid';
+import { HardChecks } from '../components/ui/HardChecks';
 import { ModeTabs, modeLabel } from '../components/ui/ModeTabs';
 import { ResumeUpload } from '../components/ui/ResumeUpload';
 import { JDInput } from '../components/ui/JDInput';
@@ -288,6 +289,7 @@ export default function AnalyzePage() {
           {score && (
             <>
               <ScoreCard score={score} />
+              <HardChecks checks={score.hardChecks} />
               <SkillGrid skills={score.matchedSkills} missingNiceToHave={score.missingNiceToHave} />
             </>
           )}
