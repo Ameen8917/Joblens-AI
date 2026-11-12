@@ -19,6 +19,21 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 - **Demonstrated vs. listed** — skills used in work or a project are separated from skills that are only named
 - **Requirement checks** — rule-based results for experience, seniority, location, visa and education, which can also report that the resume doesn't say
 
+### Measured Quality
+`npm run eval` runs the real Gemini pipeline over 5 synthetic resumes (one in a two-column layout) and 6 job descriptions, with 18 resume–job pairs labelled by hand. Current results:
+
+| What's measured | Result |
+|---|---|
+| Required skills extracted from job descriptions (recall / precision) | 100% / 92% |
+| Job fields: years, seniority, work mode, visa, education | 100% |
+| Skills extracted from resumes | 100% |
+| Skill quotes confirmed in the PDF text | 91% (100% on single-column, 50% on two-column) |
+| Requirement checks that match the label | 83% |
+| Fit label (strong / moderate / weak) from the final score | 89%, up from 33% before recalibration |
+| Labelled pairs ranked in the right order by final score | 97% |
+
+Gemini responses are cached under a key covering the model, schema and prompt. A scoring-logic change replays in about a second with no API calls, and a prompt or model change calls Gemini again. The run fails if any metric drops more than 5 points below the committed baseline.
+
 ### Four AI Analysis Modes
 | Mode | Output |
 |------|--------|
@@ -118,6 +133,7 @@ joblens-ai/
 │   │   ├── app.ts                 # Express app setup + CORS + routes
 │   │   └── server.ts              # Entry point — DB + Gemini init + listen
 │   ├── tests/                     # Vitest unit tests
+│   ├── eval/                      # Quality eval: fixtures, labels, runner, cache and baseline
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── .env.example
@@ -211,8 +227,13 @@ Frontend runs at `http://localhost:5173`
 
 ```bash
 cd backend
-npm test
+npm test               # unit tests, no API key needed
+npm run eval           # quality eval, replaying cached Gemini responses
+npm run eval:fresh     # quality eval with every request sent to Gemini
+npm run eval:baseline  # save the current results as the baseline
 ```
+
+Run `npm run eval` after any prompt, schema, model or scoring change. Requests missing from the cache need `GEMINI_API_KEY`. On the free tier the runner waits out rate limits, so a fresh run takes a few minutes.
 
 ---
 
@@ -300,7 +321,8 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 
 **Semantic Score** — cosine similarity between JD and resume embeddings
 - Embeddings generated with `gemini-embedding-001`
-- Similarity remapped from [-1, 1] to [0, 100]
+- Similarity mapped linearly from [0.55, 0.85] to [0, 100], and clamped
+- The range was measured by the eval: even unrelated resumes and jobs score a cosine near 0.6, so the earlier [-1, 1] mapping put every pair between 80 and 92
 - Catches conceptual matches that keyword comparison misses
 
 **Score Interpretation**
@@ -334,15 +356,15 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 
 - **Gemini rate limits** — the free tier has request limits. Requests are retried, but heavy use can still fail
 - **No auth** — there are no user accounts, so anyone with a resume ID can read that stored resume. Saved jobs live in browser localStorage
-- **Semantic score runs high** — similarity is remapped from [-1, 1], and real embeddings rarely score near the bottom of that range. Recalibrating it is on the roadmap
+- **Calibrated on a small set** — the semantic calibration comes from 18 synthetic pairs. Re-measure it with real resumes, and after any change to the embedding model or the embedded text
 - **Resume Tailoring and Mock Interview** are rule-based previews, not yet AI-backed
-- **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. Multi-column layouts can also cause real lines to go unconfirmed
+- **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. In the two-column fixture, wrapped lines and one-word quotes left half the skills unconfirmed
+- **Requirement checks over-flag** — the eval shows location warnings when a city is inside a listed country or region (Toronto for "US or Canada"), and visa passes when the candidate is authorized in a different country
 
 ---
 
 ## ✦ Roadmap
 
-- [ ] Quality test suite with expected results, and a recalibrated semantic score
 - [ ] AI-backed resume tailoring with accept and reject controls
 - [ ] Live mock interview with streamed follow-up questions
 - [ ] Live demo, CI and a one-command Docker setup

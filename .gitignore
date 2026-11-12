@@ -4,6 +4,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+backend/eval/results.json
 notes.md
 docs
 LICENSE

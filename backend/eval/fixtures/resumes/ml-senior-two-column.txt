@@ -1,0 +1,27 @@
+Tomasz Kowalczyk
+Warsaw, Poland
+tomasz.k@example.com
+Will require UK visa sponsorship
+
+SKILLS
+Python, PyTorch, SQL, Spark
+Airflow, AWS, scikit-learn
+XGBoost, Docker, TensorFlow
+
+EDUCATION
+M.Sc. in Statistics
+University of Warsaw, 2018
+---
+Senior Machine Learning Engineer
+
+EXPERIENCE
+Senior Machine Learning Engineer, Finlytix (Warsaw, Poland)
+Feb 2022 - Oct 2026
+- Trained PyTorch ranking models that lifted click-through rate by 11% across 30 million daily recommendations
+- Built Spark feature pipelines over 4TB of event data, scheduled with Airflow
+- Served models on AWS SageMaker with p99 latency under 50ms
+
+Data Scientist, Vistula Analytics (Krakow, Poland)
+Jan 2019 - Jan 2022
+- Wrote SQL and Python analyses that guided pricing for 1,200 retail stores
+- Built churn models with scikit-learn and XGBoost

@@ -1,0 +1,28 @@
+Jordan Avery
+Backend Engineer
+Austin, TX | jordan.avery@example.com
+Authorized to work in the US without sponsorship
+
+SUMMARY
+Backend engineer with nearly 4 years of experience building APIs and data pipelines for fintech products.
+
+EXPERIENCE
+Software Engineer, Ledgerly (Austin, TX)
+Mar 2024 - Oct 2026
+- Built payment reconciliation APIs in Node.js and TypeScript that handle 2 million transactions a day
+- Designed PostgreSQL schemas and cut p95 query latency from 900ms to 120ms with targeted indexes
+- Added Redis caching for account balances, reducing database load by 40%
+- Containerized services with Docker and deployed them to AWS ECS
+
+Junior Software Engineer, Brightpath Health (Remote)
+Jan 2023 - Feb 2024
+- Maintained Java Spring Boot services for appointment scheduling
+- Wrote integration tests with Jest for the patient portal API
+
+EDUCATION
+B.S. in Computer Science, University of Texas at Austin, 2022
+
+SKILLS
+Languages: TypeScript, JavaScript, Java, SQL
+Backend: Node.js, Express, PostgreSQL, Redis, GraphQL
+Infrastructure: Docker, AWS, Kubernetes, GitHub Actions

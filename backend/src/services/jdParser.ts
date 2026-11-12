@@ -42,13 +42,14 @@ export const hashJobText = (rawText: string): string =>
 
 const toResult = (job: IJob): { jobId: string; parsed: ParsedJD } => ({ jobId: String(job._id), parsed: job.parsed });
 
-export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed: ParsedJD }> => {
+const assertLongEnough = (rawText: string): void => {
   if (!rawText || rawText.trim().length < 50)
     throw new AppError("Job description too short (minimum 50 characters)", 400);
-  const contentHash = hashJobText(rawText);
-  const existing = await Job.findOne({ contentHash });
-  if (existing) return toResult(existing);
+};
 
+/** The model steps only, with nothing stored, so the eval suite can run them without a database. */
+export const extractJD = async (rawText: string): Promise<{ parsed: ParsedJD; embedding: number[] }> => {
+  assertLongEnough(rawText);
   const data = await generateStructured(ParsedJDSchema, [{ text: buildJDPrompt(rawText) }]);
   const parsed: ParsedJD = { ...data, rawText };
   const embeddingText = [
@@ -57,7 +58,16 @@ export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed:
     `Tools: ${parsed.tools.join(", ")}`,
     `Responsibilities: ${parsed.responsibilities.join(". ")}`,
   ].join("\n");
-  const embedding = await generateEmbedding(embeddingText);
+  return { parsed, embedding: await generateEmbedding(embeddingText) };
+};
+
+export const parseJD = async (rawText: string): Promise<{ jobId: string; parsed: ParsedJD }> => {
+  assertLongEnough(rawText);
+  const contentHash = hashJobText(rawText);
+  const existing = await Job.findOne({ contentHash });
+  if (existing) return toResult(existing);
+
+  const { parsed, embedding } = await extractJD(rawText);
   const job = new Job({ rawText, contentHash, parsed, embedding });
   try {
     await job.save();

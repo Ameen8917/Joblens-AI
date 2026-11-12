@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeScore, skillsMatch } from "../src/services/scorer";
+import { computeScore, SEMANTIC_CALIBRATION, skillsMatch, toSemanticScore } from "../src/services/scorer";
 import { ParsedJD, ParsedResume } from "../src/types";
 
 describe("skillsMatch", () => {
@@ -110,9 +110,18 @@ describe("computeScore", () => {
   });
 
   it("weights the final score 60% semantic and 40% programmatic", () => {
-    const score = computeScore(jd(["kafka"]), resume(["react"]), [1, 0], [0, 1]);
+    const score = computeScore(jd(["kafka"]), resume(["react"]), [1, 0], [1, 0]);
     expect(score.programmaticScore).toBe(0);
-    expect(score.semanticScore).toBe(50);
-    expect(score.finalScore).toBe(30);
+    expect(score.semanticScore).toBe(100);
+    expect(score.finalScore).toBe(60);
+  });
+
+  it("scores similarity on the calibrated scale, not the raw cosine range", () => {
+    const { floor, ceiling } = SEMANTIC_CALIBRATION;
+    expect(toSemanticScore(floor)).toBe(0);
+    expect(toSemanticScore(ceiling)).toBe(100);
+    expect(toSemanticScore((floor + ceiling) / 2)).toBe(50);
+    // Unrelated texts still have a positive cosine, which the old (cosine + 1) / 2 mapping turned into about 80.
+    expect(toSemanticScore(0.6)).toBeLessThan(25);
   });
 });

@@ -1,0 +1,21 @@
+Priya Natarajan
+Frontend Developer
+Toronto, ON | priya.n@example.com
+
+EXPERIENCE
+Frontend Developer, Maple Cart (Toronto, ON)
+May 2025 - Oct 2026
+- Built checkout and cart pages in React and TypeScript used by 80,000 shoppers a month
+- Migrated the marketing site to Next.js with static generation, raising Lighthouse performance from 62 to 94
+- Wrote unit tests with Jest and React Testing Library, raising coverage to 85%
+- Implemented responsive layouts in CSS and Tailwind CSS from Figma designs
+
+PROJECTS
+Recipe Finder - a React app that searches 10,000 recipes through a GraphQL API I wrote in Node.js
+
+EDUCATION
+B.A. in Psychology, University of Toronto, 2024
+Frontend Web Development Certificate, Lakeview Coding School, 2025
+
+SKILLS
+React, TypeScript, JavaScript, Next.js, CSS, Tailwind CSS, Jest, Vue, Git

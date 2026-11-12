@@ -1,0 +1,20 @@
+Staff Platform Engineer
+Remote within Europe. You must be eligible to work in the EU.
+Northstack runs the infrastructure behind 2,000 online stores.
+
+What you'll do
+- Set technical direction for our Kubernetes platform
+- Build internal tooling in Go
+- Manage AWS infrastructure as code with Terraform
+- Lead incident reviews and improve on-call health
+
+What we're looking for
+- 8+ years in infrastructure, SRE or platform roles
+- Expert Kubernetes and Terraform
+- Production Go
+- AWS
+- Bachelor's degree in a technical field
+
+Nice to have
+- GCP
+- Prometheus

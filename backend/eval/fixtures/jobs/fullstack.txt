@@ -1,0 +1,20 @@
+Full Stack Engineer
+Hybrid in Toronto, ON, or remote within Canada
+Pinecrest Learning builds course software used by 400 colleges.
+
+What you'll do
+- Build features end to end, with React on the frontend and Node.js on the backend
+- Design PostgreSQL tables and REST APIs
+- Deploy and monitor services on AWS
+
+Requirements
+- 3+ years of professional software development
+- React
+- Node.js
+- TypeScript
+- PostgreSQL
+
+Nice to have
+- AWS
+- Docker
+- GraphQL

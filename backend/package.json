@@ -7,7 +7,11 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc -p eval",
+    "eval": "ts-node --transpile-only eval/run.ts",
+    "eval:fresh": "ts-node --transpile-only eval/run.ts --fresh",
+    "eval:baseline": "ts-node --transpile-only eval/run.ts --update-baseline"
   },
   "dependencies": {
     "@google/generative-ai": "^0.21.0",

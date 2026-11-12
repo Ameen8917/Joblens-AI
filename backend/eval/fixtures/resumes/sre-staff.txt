@@ -1,0 +1,23 @@
+Lena Fischer
+Staff Site Reliability Engineer
+Berlin, Germany (open to remote work across the EU)
+EU citizen
+
+EXPERIENCE
+Staff Site Reliability Engineer, Cloudvane (Berlin, Germany)
+Mar 2021 - Oct 2026
+- Ran 40 Kubernetes clusters across AWS and GCP serving 300 microservices
+- Wrote Terraform modules that every product team uses to provision infrastructure
+- Built a Go service that autoscales batch workers, saving $1.2M a year in compute
+- Set up Prometheus and Grafana alerting that cut pages per week from 35 to 6
+
+Senior DevOps Engineer, Datacraft (Munich, Germany)
+Jun 2016 - Feb 2021
+- Moved 120 services from VMs to Docker on Kubernetes with zero-downtime cutovers
+- Automated release pipelines with Jenkins and Ansible
+
+EDUCATION
+B.Sc. in Computer Science, Technical University of Munich, 2016
+
+SKILLS
+Kubernetes, Terraform, AWS, GCP, Go, Python, Prometheus, Grafana, Docker, Jenkins, Ansible, Helm

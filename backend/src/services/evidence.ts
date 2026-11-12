@@ -2,7 +2,7 @@ import { EvidenceLevel, EvidenceSection, SkillEvidence } from "../types";
 import { mentionsSkill } from "./scorer";
 
 // Short strings can appear by chance inside longer words.
-const MIN_QUOTE_CHARS = 12;
+export const MIN_QUOTE_CHARS = 12;
 const WORK_SECTIONS = new Set<EvidenceSection>(["experience", "project"]);
 
 /** Drops case, spacing and punctuation, which PDF extraction changes through line wraps, hyphenation and ligatures. */
