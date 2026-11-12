@@ -1,0 +1,19 @@
+Junior Software Engineer
+Chicago, IL - on-site
+Lakeshore Freight Systems builds routing software for regional trucking companies.
+
+What you'll do
+- Build and test features in our Java services
+- Write SQL for reporting and data fixes
+- Pair with senior engineers on code reviews
+
+Requirements
+- 0-1 years of experience. New graduates are welcome.
+- Java
+- SQL
+- Bachelor's degree in Computer Science
+- Must be authorized to work in the United States. We do not offer visa sponsorship.
+
+Nice to have
+- Spring Boot
+- Docker

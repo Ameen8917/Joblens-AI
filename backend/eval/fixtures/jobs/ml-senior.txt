@@ -1,0 +1,21 @@
+Senior Machine Learning Engineer
+Location: London, UK (on-site, 5 days a week)
+Arcadia Retail uses machine learning to personalise shopping for 20 million customers.
+
+Responsibilities
+- Train and ship ranking and recommendation models
+- Build feature pipelines on Spark
+- Run experiments and measure model impact
+
+Requirements
+- 5+ years in machine learning engineering or data science
+- Python and PyTorch
+- SQL
+- Spark
+- Master's degree or PhD in Computer Science, Statistics or a related field
+
+Nice to have
+- Airflow
+- AWS SageMaker
+
+Visa sponsorship is available for this role.

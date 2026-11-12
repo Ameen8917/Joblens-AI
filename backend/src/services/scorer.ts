@@ -1,7 +1,7 @@
 import { EvidenceLevel, ParsedJD, ParsedResume, ScoreBreakdown, SkillEvidence, SkillMatch } from "../types";
 import { runHardChecks } from "./hardChecks";
 
-const cosineSimilarity = (a: number[], b: number[]): number => {
+export const cosineSimilarity = (a: number[], b: number[]): number => {
   const dot = a.reduce((sum, ai, i) => sum + ai * b[i], 0);
   const magA = Math.sqrt(a.reduce((sum, ai) => sum + ai * ai, 0));
   const magB = Math.sqrt(b.reduce((sum, bi) => sum + bi * bi, 0));
@@ -79,6 +79,23 @@ const strongestEvidence = (jdSkill: string, status: "matched" | "partial", evide
   return { evidence: best.level, quote: best.quote };
 };
 
+/** Cosine similarities at or below floor score 0, and at or above ceiling score 100. */
+export interface SemanticCalibration { floor: number; ceiling: number }
+
+/**
+ * Measured by `npm run eval`. Unrelated resumes and jobs still have a cosine near 0.6 with gemini-embedding-001,
+ * so the old (cosine + 1) / 2 mapping put every pair between 80 and 92. The eval suggested 0.562 and 0.828 from
+ * 18 labelled pairs; these are rounded to avoid overfitting a small set. Re-measure after changing the embedding
+ * model or the text that gets embedded.
+ */
+export const SEMANTIC_CALIBRATION: SemanticCalibration = { floor: 0.55, ceiling: 0.85 };
+
+export const toSemanticScore = (similarity: number, { floor, ceiling }: SemanticCalibration = SEMANTIC_CALIBRATION): number =>
+  Math.round(Math.min(Math.max((similarity - floor) / (ceiling - floor), 0), 1) * 100);
+
+export const combineScores = (semanticScore: number, programmaticScore: number): number =>
+  Math.min(Math.round(semanticScore * 0.6 + programmaticScore * 0.4), 100);
+
 export const computeScore = (
   jd: ParsedJD, resume: ParsedResume, jdEmbedding: number[], resumeEmbedding: number[]
 ): ScoreBreakdown => {
@@ -110,9 +127,8 @@ export const computeScore = (
     Math.min(Math.round(matchedSkills.reduce((s, m) =>
       s + (m.status === "matched" ? 1 : m.status === "partial" ? 0.5 : 0), 0) / totalRequired * 100), 100);
 
-  const similarity = cosineSimilarity(jdEmbedding, resumeEmbedding);
-  const semanticScore = Math.round(((similarity + 1) / 2) * 100);
-  const finalScore = Math.min(Math.round(semanticScore * 0.6 + programmaticScore * 0.4), 100);
+  const semanticScore = toSemanticScore(cosineSimilarity(jdEmbedding, resumeEmbedding));
+  const finalScore = combineScores(semanticScore, programmaticScore);
 
   return {
     programmaticScore, semanticScore, finalScore, matchedSkills,

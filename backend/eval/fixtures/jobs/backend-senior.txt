@@ -1,0 +1,23 @@
+Senior Backend Engineer - Payments
+Ledgerline Financial is hiring a Senior Backend Engineer to scale our payments platform.
+Location: Austin, TX (hybrid, 3 days a week in the office)
+
+What you'll do
+- Design and build high-volume payment APIs
+- Own PostgreSQL data models and query performance
+- Improve the reliability of services running on AWS
+- Mentor engineers and lead design reviews
+
+Requirements
+- 5+ years of professional backend development experience
+- Strong Node.js and TypeScript
+- Deep experience with PostgreSQL
+- Production experience with AWS
+- Bachelor's degree in Computer Science or equivalent practical experience
+
+Nice to have
+- Kubernetes
+- GraphQL
+- Experience in fintech
+
+We are unable to sponsor work visas for this role.

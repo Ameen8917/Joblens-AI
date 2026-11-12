@@ -1,0 +1,15 @@
+{
+  "jdRequiredRecall": 1,
+  "jdRequiredPrecision": 0.92,
+  "jdNiceToHaveRecall": 1,
+  "jdFieldAccuracy": 1,
+  "resumeSkillRecall": 1,
+  "resumeFieldAccuracy": 0.9333333333333333,
+  "quoteConfirmedRate": 0.9056603773584906,
+  "evidenceLevelAccuracy": 0.9056603773584906,
+  "skillMatchAccuracy": 1,
+  "hardCheckAccuracy": 0.8295454545454546,
+  "fitLabelAccuracy": 0.8888888888888888,
+  "scoreRanking": 0.968421052631579,
+  "similarityRanking": 0.968421052631579
+}

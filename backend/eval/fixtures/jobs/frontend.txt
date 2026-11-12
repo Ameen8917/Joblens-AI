@@ -1,0 +1,20 @@
+Frontend Engineer
+Remote (US or Canada)
+Brightside is a small team building scheduling software for clinics.
+
+You will
+- Build product features in React and TypeScript
+- Own our Next.js marketing and docs sites
+- Work closely with design to ship accessible UI
+
+You have
+- 2+ years building production web apps
+- React, TypeScript and Next.js
+- Strong CSS skills
+- Experience writing tests with Jest or similar
+
+Bonus
+- GraphQL
+- Experience with design systems
+
+No degree required.

@@ -1,0 +1,19 @@
+Marcus Bell
+Chicago, IL | marcus.bell@example.com
+U.S. citizen
+
+EDUCATION
+B.S. in Computer Science, University of Illinois Chicago, May 2026
+
+EXPERIENCE
+Software Engineering Intern, Rivet Freight (Chicago, IL)
+May 2025 - Aug 2025
+- Added a Java endpoint to the shipment tracking service and covered it with JUnit tests
+- Wrote SQL queries that flagged 3% of late shipments for review
+
+PROJECTS
+Campus Parking Tracker - a Python Flask app with a PostgreSQL database, used by 600 students
+Ray Tracer - a multithreaded C++ renderer that draws a 1080p scene in 4 seconds
+
+SKILLS
+Java, Python, C++, SQL, PostgreSQL, Flask, JUnit, Git, Linux
