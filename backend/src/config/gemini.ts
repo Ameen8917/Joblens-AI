@@ -26,6 +26,8 @@ export const setResponseCache = (cache: ResponseCache | null): void => { respons
 // The key covers the model, settings, schema and full prompt, so changing any of them is a cache miss.
 const requestKey = (request: unknown): string => createHash("sha256").update(JSON.stringify(request)).digest("hex");
 
+export const DAILY_QUOTA_MESSAGE = "The AI service's daily quota is used up. Please try again tomorrow.";
+
 const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 const getStatus = (error: unknown): number | undefined => (error as { status?: number }).status;
@@ -41,6 +43,8 @@ export const isRetryableGeminiError = (error: unknown): boolean => {
 export const toAppError = (error: unknown): AppError => {
   const message = error instanceof Error ? error.message : String(error);
   console.error(`[Gemini] Request failed: ${message}`);
+  // A per-day quota won't clear with a short wait, unlike the per-minute one.
+  if (getStatus(error) === 429 && /PerDay/i.test(message)) return new AppError(DAILY_QUOTA_MESSAGE, 503);
   if (getStatus(error) === 429) return new AppError("The AI service is busy. Please try again shortly.", 503);
   if (error instanceof InvalidStructuredOutputError) return new AppError("The AI service returned an unusable response. Please try again.", 502);
   return new AppError("The AI service request failed. Please try again.", 502);

@@ -10,6 +10,9 @@
   "skillMatchAccuracy": 1,
   "hardCheckAccuracy": 0.8295454545454546,
   "fitLabelAccuracy": 0.8888888888888888,
-  "scoreRanking": 0.968421052631579,
-  "similarityRanking": 0.968421052631579
+  "scoreRanking": 0.9842105263157894,
+  "similarityRanking": 0.9789473684210527,
+  "tailorRewritesKept": 0.9047619047619048,
+  "tailorRewritesClean": 0.8947368421052632,
+  "tailorRewritesSupported": 1
 }

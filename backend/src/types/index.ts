@@ -107,6 +107,46 @@ export interface InterviewPrepOutput {
   }[];
 }
 
+/**
+ * Something a rewrite changes about what the bullet claims.
+ * unsupported: a number or skill that's nowhere on the resume.
+ * check: a number or skill from elsewhere on the resume, a verb claiming more responsibility, or a vague benefit such as
+ * "improving reliability" that the original doesn't state, for the candidate to confirm.
+ * dropped: a number or skill the original showed and the rewrite leaves out.
+ */
+export interface ClaimFlag {
+  kind: "number" | "skill" | "scope" | "outcome";
+  claim: string;
+  severity: "unsupported" | "check" | "dropped";
+  detail: string;
+}
+
+export interface BulletRewrite {
+  /** "work index-highlight index" into resume.workHistory. */
+  id: string;
+  company: string;
+  role: string;
+  original: string;
+  rewritten: string;
+  targetSkills: string[];
+  reason: string;
+  flags: ClaimFlag[];
+}
+
+export interface TailoringSuggestions {
+  rewrites: BulletRewrite[];
+  /** Rewrites dropped because they pointed at a bullet that doesn't exist or changed nothing. */
+  discarded: number;
+}
+
+export interface TailoredScore {
+  before: ScoreBreakdown;
+  after: ScoreBreakdown;
+  edits: { id: string; flags: ClaimFlag[]; counted: boolean }[];
+  /** Required skills that were only listed and now appear in an accepted work bullet. */
+  evidenceUpgrades: string[];
+}
+
 export interface ApiError {
   success: false;
   error: string;

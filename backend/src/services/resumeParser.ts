@@ -44,6 +44,18 @@ export const ParsedResumeSchema = z.object({
 const RESUME_PROMPT = `You are a resume parser. Extract structured data from this resume PDF. Only include what the resume states.
 For skillEvidence, cite the line that best proves each skill. Prefer a line describing work or a project over a skills list. Copy the line exactly, without shortening, paraphrasing or merging lines. Never invent a line. Leave out any skill you can't cite.`;
 
+/**
+ * What the semantic score compares against the job. It includes the work bullets, which carry most of what a
+ * candidate actually did, so rewriting a bullet changes the score.
+ */
+export const resumeEmbeddingText = (parsed: ParsedResume): string => [
+  `Skills: ${parsed.skills.join(", ")}`,
+  `Tools: ${parsed.tools.join(", ")}`,
+  `Experience: ${parsed.yearsOfExperience} years`,
+  `Work: ${parsed.workHistory.map(w => `${w.role} at ${w.company}`).join(", ")}`,
+  `Highlights: ${parsed.workHistory.flatMap(w => w.highlights).join(" ")}`,
+].join("\n");
+
 /** The model and PDF steps only, with nothing stored, so the eval suite can run them without a database. */
 export const extractResume = async (pdfBuffer: Buffer): Promise<{ parsed: ParsedResume; rawText: string; embedding: number[] }> => {
   const [data, rawText] = await Promise.all([
@@ -55,14 +67,7 @@ export const extractResume = async (pdfBuffer: Buffer): Promise<{ parsed: Parsed
   ]);
   const parsed: ParsedResume = { ...data, skillEvidence: gradeEvidence(data.skillEvidence, rawText), rawText: "" };
 
-  const embeddingText = [
-    `Skills: ${parsed.skills.join(", ")}`,
-    `Tools: ${parsed.tools.join(", ")}`,
-    `Experience: ${parsed.yearsOfExperience} years`,
-    `Work: ${parsed.workHistory.map(w => `${w.role} at ${w.company}`).join(", ")}`,
-  ].join("\n");
-
-  return { parsed, rawText, embedding: await generateEmbedding(embeddingText) };
+  return { parsed, rawText, embedding: await generateEmbedding(resumeEmbeddingText(parsed)) };
 };
 
 export const parseResume = async (pdfBuffer: Buffer): Promise<{ resumeId: string; parsed: ParsedResume }> => {
