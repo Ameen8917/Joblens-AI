@@ -2,6 +2,37 @@ import { describe, expect, it } from "vitest";
 import { computeScore, SEMANTIC_CALIBRATION, skillsMatch, toSemanticScore } from "../src/services/scorer";
 import { ParsedJD, ParsedResume } from "../src/types";
 
+describe("broad requirements", () => {
+  const jd = (requiredSkills: string[]) => ({ requiredSkills, niceToHaveSkills: [], yearsOfExperience: 0 }) as unknown as ParsedJD;
+  const resume = (skills: string[]) => ({ skills, tools: [], skillEvidence: [], yearsOfExperience: 0, workHistory: [], education: [] }) as unknown as ParsedResume;
+  const matchFor = (required: string, skills: string[]) => computeScore(jd([required]), resume(skills), [1], [1]).matchedSkills[0];
+
+  it.each([
+    ["backend development", ["Node.js", "PostgreSQL"]],
+    ["API design", ["REST", "Express", "Docker"]],
+    ["infrastructure", ["Kubernetes", "Terraform"]],
+    ["platform engineering", ["Kubernetes", "Docker", "Go"]],
+  ])("matches %s from related skills", (required, skills) => {
+    const match = matchFor(required, skills);
+    expect(match.status).toBe("matched");
+    expect(match.shownBy!.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("needs two related skills, not one", () => {
+    expect(matchFor("backend development", ["Node.js", "React"]).status).toBe("missing");
+  });
+
+  it("counts one resume skill once, even when it shows two signals", () => {
+    // PostgreSQL shows both "postgresql" and "sql".
+    expect(matchFor("database design", ["PostgreSQL"]).status).toBe("missing");
+  });
+
+  it("leaves specific skills to exact matching", () => {
+    expect(matchFor("machine learning", ["Python", "PyTorch", "SQL"]).status).toBe("missing");
+    expect(matchFor("react", ["Vue", "CSS", "HTML"]).status).toBe("missing");
+  });
+});
+
 describe("skillsMatch", () => {
   it.each([
     ["javascript", "java"],

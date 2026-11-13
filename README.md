@@ -24,18 +24,20 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 
 | What's measured | Result |
 |---|---|
-| Required skills extracted from job descriptions (recall / precision) | 100% / 92% |
+| Required skills extracted from job descriptions (recall / precision) | 100% / 100% |
 | Job fields: years, seniority, work mode, visa, education | 100% |
-| Skills extracted from resumes | 100% |
-| Skill quotes confirmed in the PDF text | 91% (100% on single-column, 50% on two-column) |
-| Requirement checks that match the label | 83% |
-| Fit label (strong / moderate / weak) from the final score | 89%, up from 33% before recalibration |
-| Labelled pairs ranked in the right order by final score | 98% |
+| Resume skills, years, location and work authorization | 100% |
+| Skill quotes confirmed in the PDF text, including the two-column resume | 100%, up from 91% |
+| Requirement checks that match the label | 100%, up from 83% |
+| Fit label (strong / moderate / weak) from the final score | 94%, up from 33% before recalibration |
+| Labelled pairs ranked in the right order by final score | 100% |
 | Tailoring rewrites that invent a number or skill | 0% (19 rewrites) |
 | Tailoring rewrites that drop a skill or inflate responsibility | 0%, down from 36% with the first prompt |
 | Tailoring rewrites flagged for a vague benefit ("improving reliability") | 11% |
 
 Gemini responses are cached under a key covering the model, schema and prompt. A scoring-logic change replays in about a second with no API calls, and a prompt or model change calls Gemini again. The run fails if any metric drops more than 5 points below the committed baseline.
+
+The eval found 8 bugs, all now fixed: requirement checks that ignored a city inside a listed country or region and which country a work authorization covers; seniority read from titles alone; a job parser that turned "Remote (US or Canada)" into a visa requirement; broad requirements such as "backend development" counted as missing; and, on the two-column resume, quotes broken by the other column and years of experience read as 5 instead of 7.8. Years are now counted in code from each role's dates. These results come from the same 18 pairs that surfaced the bugs, so they're optimistic until the set grows.
 
 ### Four AI Analysis Modes
 | Mode | Output |
@@ -390,16 +392,15 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 
 - **Gemini rate limits** — the free tier has request limits. Requests are retried, but heavy use can still fail
 - **No auth** — there are no user accounts, so anyone with a resume ID can read that stored resume. Saved jobs live in browser localStorage
-- **Calibrated on a small set** — the semantic calibration comes from 18 synthetic pairs. Re-measure it with real resumes, and after any change to the embedding model or the embedded text
-- **Resume Tailoring and Mock Interview** are rule-based previews, not yet AI-backed
-- **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. In the two-column fixture, wrapped lines and one-word quotes left half the skills unconfirmed
-- **Requirement checks over-flag** — the eval shows location warnings when a city is inside a listed country or region (Toronto for "US or Canada"), and visa passes when the candidate is authorized in a different country
+- **Calibrated and tuned on a small set** — the semantic calibration and the rule fixes come from 18 synthetic pairs. Re-measure with more and real resumes, and after any change to the embedding model or the embedded text
+- **Mock Interview** is a rule-based preview, not yet AI-backed
+- **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. For two-column layouts, a quote may leave out up to 8 words at the start of a wrapped line and still count, because those words can't be told apart from the other column
+- **Place matching uses a built-in list** — US states, Canadian provinces, countries and common regions. A city outside it still matches by name, but can't be placed inside a larger area
 
 ---
 
 ## ✦ Roadmap
 
-- [ ] AI-backed resume tailoring with accept and reject controls
 - [ ] Live mock interview with streamed follow-up questions
 - [ ] Live demo, CI and a one-command Docker setup
 

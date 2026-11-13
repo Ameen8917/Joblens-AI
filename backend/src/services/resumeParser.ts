@@ -5,6 +5,7 @@ import { Resume, IResume } from "../models/Resume";
 import { ParsedResume } from "../types";
 import { extractPdfText } from "../utils/pdfText";
 import { gradeEvidence } from "./evidence";
+import { yearsFromWorkHistory } from "./experienceYears";
 
 export const ParsedResumeSchema = z.object({
   name: z.string().default("Unknown"),
@@ -65,7 +66,13 @@ export const extractResume = async (pdfBuffer: Buffer): Promise<{ parsed: Parsed
     ]),
     extractPdfText(pdfBuffer),
   ]);
-  const parsed: ParsedResume = { ...data, skillEvidence: gradeEvidence(data.skillEvidence, rawText), rawText: "" };
+  const parsed: ParsedResume = {
+    ...data,
+    // Counted from the roles' dates when they can all be read, since the model's own arithmetic can be years off.
+    yearsOfExperience: yearsFromWorkHistory(data.workHistory) ?? data.yearsOfExperience,
+    skillEvidence: gradeEvidence(data.skillEvidence, rawText),
+    rawText: "",
+  };
 
   return { parsed, rawText, embedding: await generateEmbedding(resumeEmbeddingText(parsed)) };
 };

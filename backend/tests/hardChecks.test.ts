@@ -28,7 +28,10 @@ describe("seniority", () => {
     ["senior", ["Software Engineer"], "warn"],
     ["staff", ["Junior Developer"], "fail"],
     ["mid", ["Internal Tools Engineer"], "pass"],
-    ["junior", ["Intern"], "warn"],
+    ["junior", ["Intern"], "pass"],
+    ["mid", ["Intern"], "fail"],
+    ["senior", ["Junior Developer", "Software Engineer"], "warn"],
+    ["mid", ["Junior Developer", "Software Engineer"], "pass"],
   ] as const)("job %s with roles %j: %s", (seniority, titles, expected) => {
     expect(statusOf("seniority", { seniority }, { workHistory: roles(...titles) })).toBe(expected);
   });
@@ -49,6 +52,15 @@ describe("location", () => {
     [["New York, NY"], "New York City", "pass"],
     [["Berlin"], "Paris, France", "warn"],
     [["Berlin"], "", "unknown"],
+    [["US", "Canada"], "Austin, TX", "pass"],
+    [["US", "Canada"], "Toronto, ON", "pass"],
+    [["Remote (US or Canada)"], "Vancouver, British Columbia", "pass"],
+    [["Europe"], "Warsaw, Poland", "pass"],
+    [["Remote within the EU"], "Berlin, Germany", "pass"],
+    [["Europe"], "Austin, TX", "warn"],
+    [["Canada"], "Seattle, WA", "warn"],
+    // A city-level job isn't met by another city in the same state.
+    [["Austin, TX"], "Dallas, TX", "warn"],
   ])("job in %j, candidate in %s: %s", (locations, location, expected) => {
     expect(statusOf("location", { locations, workMode: "onsite" }, { location })).toBe(expected);
   });
@@ -75,6 +87,23 @@ describe("visa", () => {
   it("passes stated authorization and fails a stated need for sponsorship", () => {
     expect(statusOf("visa", { visaSponsorship: "not_offered" }, { workAuthorization: "US Citizen" })).toBe("pass");
     expect(statusOf("visa", { visaSponsorship: "not_offered" }, { workAuthorization: "Requires H-1B sponsorship" })).toBe("fail");
+  });
+
+  it.each([
+    ["You must be eligible to work in the EU", [], "Authorized to work in the US", "fail"],
+    ["You must be eligible to work in the EU", [], "German citizen", "pass"],
+    ["Must be authorized to work in Germany", [], "EU citizen", "pass"],
+    ["", ["Austin, TX"], "EU citizen", "fail"],
+    ["", ["Austin, TX"], "U.S. citizen", "pass"],
+    ["US or Canada work authorization", [], "Canadian permanent resident", "pass"],
+  ] as const)("requirement %j at %j against %j: %s", (workAuthorizationRequired, locations, workAuthorization, expected) => {
+    expect(statusOf("visa", { visaSponsorship: "not_offered", workAuthorizationRequired, locations: [...locations] }, { workAuthorization })).toBe(expected);
+  });
+
+  it("assumes authorization without a country applies where the candidate lives", () => {
+    const jd = { visaSponsorship: "not_offered" as const, workAuthorizationRequired: "", locations: ["Berlin, Germany"] };
+    expect(statusOf("visa", jd, { workAuthorization: "Authorized to work without sponsorship", location: "Austin, TX" })).toBe("fail");
+    expect(statusOf("visa", jd, { workAuthorization: "Authorized to work without sponsorship", location: "Munich, Germany" })).toBe("pass");
   });
 
   it("doesn't guess at wording it can't interpret", () => {

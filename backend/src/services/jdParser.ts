@@ -13,7 +13,7 @@ export const ParsedJDSchema = z.object({
   workMode: z.enum(["remote", "hybrid", "onsite", "unknown"]).default("unknown"),
   locations: z.array(z.string()).describe("Where the job is based or where remote candidates must live, as written. Empty if unrestricted").default([]),
   visaSponsorship: z.enum(["offered", "not_offered", "unknown"]).describe("Use unknown unless the job explicitly says").default("unknown"),
-  workAuthorizationRequired: z.string().describe("Citizenship, clearance or work-authorization requirement as written, or empty string").default(""),
+  workAuthorizationRequired: z.string().describe("Only an explicit requirement about citizenship, security clearance, visa status or the right to work, as written. Where the job is, or where remote candidates must live, is not one: \"Remote (US or Canada)\" goes in locations and leaves this empty. Empty string if none").default(""),
   requiredSkills: z.array(z.string()).describe("Must-have skills, lowercase").default([]),
   niceToHaveSkills: z.array(z.string()).describe("Nice-to-have skills, lowercase").default([]),
   yearsOfExperience: z.number().describe("Minimum years required, or 0 if not stated").default(0),
@@ -34,7 +34,7 @@ ${rawText}
 const MONGO_DUPLICATE_KEY = 11000;
 
 // Raise this when the parsed format changes, so stored jobs missing the new fields are parsed again.
-const PARSE_VERSION = 2;
+const PARSE_VERSION = 3;
 
 /** Ignores whitespace differences, so pasting the same job again counts as the same job. */
 export const hashJobText = (rawText: string): string =>
