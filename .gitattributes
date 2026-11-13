@@ -1,0 +1,2 @@
+backend/eval/fixtures/** text eol=lf
+backend/eval/*.json text eol=lf

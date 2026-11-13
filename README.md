@@ -2,7 +2,7 @@
 
 > **Know your fit before you apply.**
 
-A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four AI-powered analysis modes, plus resume tailoring and mock interview previews.
+A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four AI-powered analysis modes, plus resume tailoring with checked claims and a mock interview preview.
 
 ---
 
@@ -30,7 +30,10 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | Skill quotes confirmed in the PDF text | 91% (100% on single-column, 50% on two-column) |
 | Requirement checks that match the label | 83% |
 | Fit label (strong / moderate / weak) from the final score | 89%, up from 33% before recalibration |
-| Labelled pairs ranked in the right order by final score | 97% |
+| Labelled pairs ranked in the right order by final score | 98% |
+| Tailoring rewrites that invent a number or skill | 0% (19 rewrites) |
+| Tailoring rewrites that drop a skill or inflate responsibility | 0%, down from 36% with the first prompt |
+| Tailoring rewrites flagged for a vague benefit ("improving reliability") | 11% |
 
 Gemini responses are cached under a key covering the model, schema and prompt. A scoring-logic change replays in about a second with no API calls, and a prompt or model change calls Gemini again. The run fails if any metric drops more than 5 points below the committed baseline.
 
@@ -42,8 +45,18 @@ Gemini responses are cached under a key covering the model, schema and prompt. A
 | **Cover Letter** | Tailored letter citing your actual projects and experience |
 | **Interview Prep** | 9 questions (behavioral / technical / role-specific) with resume-specific answer frameworks |
 
-### Previews
-**Resume Tailoring** and **Mock Interview** (with optional voice input) run in the browser on rule-based logic until their backend exists. They are labelled as previews in the app.
+### Resume Tailoring
+- **Bullet rewrites** — Gemini rewrites up to 6 work bullets for the job, and you accept, reject or edit each one
+- **Checked claims** — code, not the model, compares every rewrite with its original bullet, its role and the rest of the resume:
+  - a number or skill that's nowhere on the resume is flagged as **not on your resume**
+  - one taken from a different role, a verb like "led" or "owned" the original didn't use, or a vague benefit like "improving reliability" the original doesn't back up, is flagged for you to **check**
+  - a number or skill the original showed and the rewrite **left out** is flagged too, since that undersells you
+- **Score change** — accepted rewrites are rescored with the real scorer. A rewrite with an unsupported claim is left out of the score, so inventing things can't raise it. Edited text is checked again on the server
+- Rewording moves the score only a few points (−2 to +4 in the eval), because the score measures what you did rather than how it's phrased
+- **ATS-friendly export** — download the tailored resume as DOCX or PDF: one column, standard headings, real text, no tables or images. A test reads the exported PDF back with the same text extractor used for uploads and checks every bullet comes out whole and in order. It's built from the parsed resume, so phone numbers and links need adding before sending
+
+### Preview
+**Mock Interview** (with optional voice input) runs in the browser on rule-based logic until its backend exists. It is labelled as a preview in the app.
 
 ### Smart Parsing Pipeline
 - JD text → Gemini 2.5 Flash → structured JSON (required skills, nice-to-have, YOE, tools, culture signals, responsibilities)
@@ -120,11 +133,14 @@ joblens-ai/
 │   │   │   ├── evidence.ts        # Verifies quotes against the PDF text and grades them
 │   │   │   ├── hardChecks.ts      # Experience, seniority, location, visa, education rules
 │   │   │   ├── scorer.ts          # Hybrid scoring engine (cosine + programmatic)
+│   │   │   ├── tailor.ts          # Bullet rewrites, claim checks and the tailored score
+│   │   │   ├── resumeExport.ts    # ATS-friendly PDF and DOCX export
 │   │   │   └── modePrompts.ts     # 4 mode-specific Gemini prompts
 │   │   ├── routes/
 │   │   │   ├── jobs.ts            # POST /api/jobs/parse, GET /api/jobs/:id
 │   │   │   ├── resumes.ts         # POST /api/resumes/parse, GET /api/resumes/:id
-│   │   │   └── analyze.ts         # POST /api/analyze, POST /api/analyze/score-only
+│   │   │   ├── analyze.ts         # POST /api/analyze, POST /api/analyze/score-only
+│   │   │   └── tailor.ts          # POST /api/tailor/suggest, /score and /export
 │   │   ├── middleware/
 │   │   │   ├── upload.ts          # Multer PDF config (5MB, memory storage)
 │   │   │   └── errorHandler.ts    # Global error handler + asyncHandler wrapper
@@ -145,14 +161,15 @@ joblens-ai/
     │   │   ├── jobs.ts            # parseJD, getJob
     │   │   ├── resumes.ts         # parseResume (multipart), getResume
     │   │   ├── analyze.ts         # analyze (4 modes), scoreOnly
-    │   │   └── preview.ts         # Browser stand-ins for tailoring and mock interview
+    │   │   ├── tailor.ts          # suggestRewrites, scoreTailored, downloadTailoredResume
+    │   │   └── preview.ts         # Browser stand-in for the mock interview
     │   ├── components/ui/
     │   │   ├── ScoreCard.tsx      # Score circle + semantic/programmatic bars
     │   │   ├── SkillGrid.tsx      # Matched / partial / missing pills + skill evidence
     │   │   ├── HardChecks.tsx     # Requirement check results
     │   │   ├── ModeTabs.tsx       # 6-tab switcher
     │   │   ├── ModeResults.tsx    # FitResult, GapResult, CoverLetterResult, InterviewResult
-    │   │   ├── ResumeTailoring.tsx # Tailoring preview
+    │   │   ├── ResumeTailoring.tsx # Accept, reject or edit rewrites, flags and score change
     │   │   ├── MockInterview.tsx  # Mock interview preview with voice input
     │   │   ├── JDInput.tsx        # Textarea → collapses to badge on parse
     │   │   ├── ResumeUpload.tsx   # Drag-and-drop PDF zone
@@ -300,6 +317,23 @@ Field: resume (PDF file, max 5MB)
 
 **Modes:** `fit` · `gaps` · `cover-letter` · `interview`
 
+### Tailor
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/tailor/suggest` | Rewrite work bullets for the job, each with its claim flags |
+| `POST` | `/api/tailor/score` | Check and score accepted rewrites, returning the score before and after |
+| `POST` | `/api/tailor/export` | Download the resume with accepted rewrites. Body: `resumeId`, `edits`, `format` (`pdf` or `docx`) |
+
+**Request — POST /api/tailor/score**
+```json
+{
+  "jobId": "664f1a2b3c4d5e6f7a8b9c0d",
+  "resumeId": "664f1a2b3c4d5e6f7a8b9c0e",
+  "edits": [{ "id": "0-1", "rewritten": "Cut PostgreSQL query latency from 900ms to 120ms with targeted indexes" }]
+}
+```
+Each `id` is `<work entry>-<bullet>`, as returned by `/suggest`.
+
 ### Health
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -320,7 +354,7 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 - Score = earned credits / total required skills × 100
 
 **Semantic Score** — cosine similarity between JD and resume embeddings
-- Embeddings generated with `gemini-embedding-001`
+- Embeddings generated with `gemini-embedding-001`. The resume side covers skills, tools, years, job titles and the work bullets
 - Similarity mapped linearly from [0.55, 0.85] to [0, 100], and clamped
 - The range was measured by the eval: even unrelated resumes and jobs score a cosine near 0.6, so the earlier [-1, 1] mapping put every pair between 80 and 92
 - Catches conceptual matches that keyword comparison misses

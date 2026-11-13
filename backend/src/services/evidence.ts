@@ -6,7 +6,7 @@ export const MIN_QUOTE_CHARS = 12;
 const WORK_SECTIONS = new Set<EvidenceSection>(["experience", "project"]);
 
 /** Drops case, spacing and punctuation, which PDF extraction changes through line wraps, hyphenation and ligatures. */
-const toComparable = (text: string): string =>
+export const toComparable = (text: string): string =>
   text.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}+#]/gu, "");
 
 export const quoteExists = (quote: string, resumeText: string): boolean => {

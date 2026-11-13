@@ -11,14 +11,15 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import dotenv from "dotenv";
-import { initGemini, setResponseCache } from "../src/config/gemini";
+import { DAILY_QUOTA_MESSAGE, initGemini, setResponseCache } from "../src/config/gemini";
 import { MIN_QUOTE_CHARS, quoteExists } from "../src/services/evidence";
 import { extractJD } from "../src/services/jdParser";
 import { extractResume } from "../src/services/resumeParser";
+import { scoreTailored, suggestRewrites } from "../src/services/tailor";
 import {
   combineScores, computeScore, cosineSimilarity, mentionsSkill, SEMANTIC_CALIBRATION, toSemanticScore,
 } from "../src/services/scorer";
-import { EvidenceLevel, ParsedJD, ParsedResume } from "../src/types";
+import { BulletRewrite, EvidenceLevel, ParsedJD, ParsedResume } from "../src/types";
 import { Fit, JOBS, PAIRS, RESUMES } from "./cases";
 import {
   accepts, compareSkills, findRegressions, fitFromScore, rankingAccuracy, ratio, sameSkill, suggestCalibration,
@@ -72,7 +73,8 @@ const mapLimit = async <T, R>(items: T[], limit: number, run: (item: T) => Promi
 // The free tier allows 5 requests a minute, which the app's own short retries don't wait out.
 const RATE_LIMIT_WAIT_MS = 65_000;
 const RATE_LIMIT_ATTEMPTS = 4;
-const isRateLimited = (error: unknown) => (error as { statusCode?: number }).statusCode === 503;
+const isRateLimited = (error: unknown) =>
+  (error as { statusCode?: number }).statusCode === 503 && (error as Error).message !== DAILY_QUOTA_MESSAGE;
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 type Outcome<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -92,7 +94,9 @@ const attempt = async <T>(label: string, run: () => Promise<T>): Promise<Outcome
   }
 };
 
-const fixture = (kind: "jobs" | "resumes", id: string) => readFileSync(join(EVAL_DIR, "fixtures", kind, `${id}.txt`), "utf8");
+// Git on Windows can check fixtures out with CRLF endings, which would change every prompt and miss the cache.
+const fixture = (kind: "jobs" | "resumes", id: string) =>
+  readFileSync(join(EVAL_DIR, "fixtures", kind, `${id}.txt`), "utf8").replace(/\r\n/g, "\n");
 
 // ---------- Report helpers ----------
 
@@ -268,6 +272,45 @@ const main = async () => {
     say(`  (fitted on these ${scored.length} pairs, so the second number is optimistic until there are more)`);
   }
 
+  // ---------- Resume tailoring ----------
+  heading("Resume tailoring (strong and moderate pairs, every rewrite accepted)");
+  const tailorPairs = PAIRS.filter(p => p.fit !== "weak" && jobs.has(p.job) && resumes.has(p.resume));
+  const tailorRuns = await mapLimit(tailorPairs, CONCURRENCY, pair => attempt(`tailor ${pair.resume} x ${pair.job}`, async () => {
+    const job = jobs.get(pair.job)!, resume = resumes.get(pair.resume)!;
+    const suggestions = await suggestRewrites(job.parsed, resume.parsed, resume.rawText);
+    const edits = suggestions.rewrites.map(r => ({ id: r.id, rewritten: r.rewritten }));
+    return { suggestions, score: await scoreTailored(job.parsed, job.embedding, resume.parsed, resume.rawText, edits) };
+  }));
+  let rewritesKept = 0, rewritesDiscarded = 0, rewritesClean = 0, rewritesSupported = 0;
+  const finalChanges: number[] = [];
+  const tailoring: { pair: string; rewrites: BulletRewrite[] }[] = [];
+  tailorPairs.forEach((pair, i) => {
+    const name = `${pair.resume} x ${pair.job}`;
+    const run = tailorRuns[i];
+    if (!run.ok) { failures.push(`tailor ${name}: ${run.error}`); return; }
+    const { suggestions: { rewrites, discarded }, score: { before, after, evidenceUpgrades } } = run.value;
+    rewritesKept += rewrites.length; rewritesDiscarded += discarded;
+    rewritesClean += rewrites.filter(r => !r.flags.length).length;
+    rewritesSupported += rewrites.filter(r => !r.flags.some(f => f.severity === "unsupported")).length;
+    finalChanges.push(after.finalScore - before.finalScore);
+    tailoring.push({ pair: name, rewrites });
+    say(`${name}: ${rewrites.length} rewrites${discarded ? `, ${discarded} discarded` : ""}, ` +
+      `semantic ${before.semanticScore} -> ${after.semanticScore}, final ${before.finalScore} -> ${after.finalScore}` +
+      (evidenceUpgrades.length ? `, now shown in work: ${evidenceUpgrades.join(", ")}` : ""));
+    for (const r of rewrites) {
+      for (const f of r.flags) problem(`${f.severity} ${f.kind} "${f.claim}" in [${r.id}] "${r.rewritten}"`);
+    }
+  });
+  const flagCounts = new Map<string, number>();
+  for (const f of tailoring.flatMap(t => t.rewrites.flatMap(r => r.flags))) {
+    flagCounts.set(`${f.severity} ${f.kind}`, (flagCounts.get(`${f.severity} ${f.kind}`) ?? 0) + 1);
+  }
+  say(`flags: ${flagCounts.size ? [...flagCounts].map(([k, n]) => `${n} ${k}`).join(", ") : "none"}`);
+  if (finalChanges.length) {
+    const mean = finalChanges.reduce((a, b) => a + b, 0) / finalChanges.length;
+    say(`final score change: mean ${mean >= 0 ? "+" : ""}${mean.toFixed(1)}, range ${Math.min(...finalChanges)} to ${Math.max(...finalChanges)}`);
+  }
+
   // ---------- Summary and baseline ----------
   const metrics: Record<string, number | null> = {
     jdRequiredRecall: ratio(reqFound, reqTotal),
@@ -283,6 +326,11 @@ const main = async () => {
     fitLabelAccuracy: labelAccuracy(scored.map(s => s.final)),
     scoreRanking: rankingAccuracy(scored.map(s => ({ fit: s.fit, value: s.final }))),
     similarityRanking: rankingAccuracy(scored.map(s => ({ fit: s.fit, value: s.similarity }))),
+    // Rewrites that point at a real bullet and change it.
+    tailorRewritesKept: ratio(rewritesKept, rewritesKept + rewritesDiscarded),
+    // Rewrites with nothing to flag, and rewrites with nothing the resume can't back up.
+    tailorRewritesClean: ratio(rewritesClean, rewritesKept),
+    tailorRewritesSupported: ratio(rewritesSupported, rewritesKept),
   };
 
   const baseline = readJson<Record<string, number | null> | null>(BASELINE_FILE, null);
@@ -297,7 +345,7 @@ const main = async () => {
   say(`${liveCalls} live Gemini calls, ${Object.keys(used).length - liveCalls} replayed from the cache, ${((Date.now() - started) / 1000).toFixed(0)}s`);
 
   writeFileSync(CACHE_FILE, JSON.stringify(Object.fromEntries(Object.keys(used).sort().map(k => [k, used[k]]))));
-  writeFileSync(RESULTS_FILE, JSON.stringify({ metrics, scored, failures, report: lines }, null, 2));
+  writeFileSync(RESULTS_FILE, JSON.stringify({ metrics, scored, tailoring, failures, report: lines }, null, 2));
 
   if (args.has("--update-baseline")) {
     if (failures.length) throw new Error("Not updating the baseline while cases fail");

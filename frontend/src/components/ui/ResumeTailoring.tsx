@@ -1,167 +1,314 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, ArrowUp, Check } from 'lucide-react';
-import { getTailoringSuggestions } from '../../api/preview';
-import { ParsedJD, ParsedResume, ScoreBreakdown, TailoringSuggestion } from '../../types';
-import { PreviewBadge } from './PreviewBadge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Check, CircleAlert, CircleX, Copy, Download, LoaderCircle, Pencil, Sparkles, TriangleAlert, X } from 'lucide-react';
+import { downloadTailoredResume, scoreTailored, suggestRewrites } from '../../api/tailor';
+import { BulletRewrite, ClaimFlag, ParsedResume, TailoredScore } from '../../types';
 
-interface Props { resume: ParsedResume; jd: ParsedJD; score: ScoreBreakdown; }
+interface Props { jobId: string; resumeId: string; resume: ParsedResume; }
 
-interface Bullet { text: string; note?: string; }
-interface Paper {
-  name: string;
-  headline: string;
-  headlineChanged?: boolean;
-  skills: { label: string; added?: boolean }[];
-  jobs: { key: string; role: string; meta: string; bullets: Bullet[] }[];
-}
+type Decision = 'accepted' | 'rejected';
 
-const toPaper = (r: ParsedResume): Paper => ({
-  name: r.name,
-  headline: r.workHistory[0]?.role ?? '',
-  skills: r.skills.map(label => ({ label })),
-  jobs: r.workHistory.slice(0, 2).map((w, i) => ({
-    key: `${w.company}-${i}`,
-    role: w.role,
-    meta: [w.company, w.duration].filter(Boolean).join(' · '),
-    bullets: w.highlights.slice(0, 3).map(text => ({ text })),
-  })),
-});
-
-const tailor = (base: Paper, jd: ParsedJD, score: ScoreBreakdown, applied: TailoringSuggestion[]): Paper => {
-  const paper: Paper = { ...base, skills: [...base.skills], jobs: base.jobs.map(j => ({ ...j, bullets: j.bullets.map(b => ({ ...b })) })) };
-
-  if (applied.some(s => s.kind === 'headline')) { paper.headline = jd.title; paper.headlineChanged = true; }
-
-  if (applied.some(s => s.kind === 'reorder-skills')) {
-    const relevant = (skill: string) => score.matchedSkills.some(m => m.status !== 'missing'
-      && (m.skill.toLowerCase().includes(skill.toLowerCase()) || skill.toLowerCase().includes(m.skill.toLowerCase())));
-    paper.skills = [...paper.skills.filter(s => relevant(s.label)), ...paper.skills.filter(s => !relevant(s.label))];
-  }
-
-  for (const s of applied) if (s.skill) paper.skills.push({ label: s.skill, added: true });
-
-  if (applied.some(s => s.kind === 'quantify')) {
-    // Never invent a number: leave a marker for the candidate to fill in.
-    const bullet = paper.jobs.flatMap(j => j.bullets).find(b => !/\d/.test(b.text));
-    if (bullet) bullet.note = '[add a real metric]';
-  }
-  return paper;
+const FLAG_STYLE: Record<ClaimFlag['severity'], { label: string; Icon: typeof CircleX; cls: string }> = {
+  unsupported: { label: 'Not on your resume', Icon: CircleX,       cls: 'bg-bad-soft text-bad'   },
+  check:       { label: 'Check this',         Icon: TriangleAlert, cls: 'bg-warn-soft text-warn' },
+  dropped:     { label: 'Left out',           Icon: CircleAlert,   cls: 'bg-info-soft text-info' },
 };
 
-const ResumePaper = ({ title, paper, emphasis }: { title: string; paper: Paper; emphasis?: boolean }) => (
-  <div className={`card min-w-0 p-5 ${emphasis ? 'border-brand-line' : ''}`}>
-    <p className="eyebrow mb-3">{title}</p>
-    <div className="rounded-xl border border-line bg-surface p-4 shadow-lift">
-      <p className="text-sm font-bold text-ink">{paper.name}</p>
-      <p className={`text-xs ${paper.headlineChanged ? 'font-semibold text-brand-dark' : 'text-body'}`}>{paper.headline}</p>
+const SCORE_DELAY_MS = 600;
+const errorText = (e: unknown) => (e instanceof Error ? e.message : 'Something went wrong');
 
-      <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-muted">Skills</p>
-      <div className="mt-1.5 flex flex-wrap gap-1">
-        {paper.skills.map(s => (
-          <span key={s.label} className={`rounded px-1.5 py-0.5 text-[11px] ${s.added ? 'bg-brand-soft font-semibold text-brand-dark' : 'bg-subtle text-body'}`}>{s.label}</span>
-        ))}
-      </div>
-
-      {paper.jobs.length > 0 && <p className="mt-4 text-[11px] font-bold uppercase tracking-wider text-muted">Experience</p>}
-      {paper.jobs.map(j => (
-        <div key={j.key} className="mt-2">
-          <p className="text-xs font-semibold text-ink">{j.role}</p>
-          <p className="text-[11px] text-muted">{j.meta}</p>
-          <ul className="mt-1 list-disc space-y-1 pl-4">
-            {j.bullets.map((b, i) => (
-              <li key={i} className="text-[11px] leading-relaxed text-body">
-                {b.text}{b.note && <span className="ml-1 font-semibold text-warn">{b.note}</span>}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ))}
-    </div>
-  </div>
+const Flags = ({ flags }: { flags: ClaimFlag[] }) => (
+  <ul className="mt-2 space-y-1">
+    {flags.map(f => {
+      const { label, Icon, cls } = FLAG_STYLE[f.severity];
+      return (
+        <li key={`${f.severity}-${f.kind}-${f.claim}`} className={`flex items-start gap-1.5 rounded-md px-2 py-1 text-[11px] leading-relaxed ${cls}`}>
+          <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
+          <span><span className="font-semibold">{label}:</span> {f.detail}</span>
+        </li>
+      );
+    })}
+  </ul>
 );
 
-export const ResumeTailoring = ({ resume, jd, score }: Props) => {
-  const [suggestions, setSuggestions] = useState<TailoringSuggestion[]>([]);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+const Delta = ({ before, after }: { before: number; after: number }) => {
+  const change = after - before;
+  const cls = change > 0 ? 'text-brand' : change < 0 ? 'text-bad' : 'text-muted';
+  return <span className={`text-xs font-semibold ${cls}`}>{change > 0 ? '+' : ''}{change}</span>;
+};
 
-  useEffect(() => {
-    let live = true;
-    getTailoringSuggestions(resume, jd, score).then(items => {
-      if (!live) return;
-      setSuggestions(items);
-      setSelected(new Set(items.map(s => s.id)));
-    });
-    return () => { live = false; };
-  }, [resume, jd, score]);
+export const ResumeTailoring = ({ jobId, resumeId, resume }: Props) => {
+  const [status, setStatus] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  const [error, setError] = useState<string | null>(null);
+  const [rewrites, setRewrites] = useState<BulletRewrite[]>([]);
+  const [discarded, setDiscarded] = useState(0);
+  const [decisions, setDecisions] = useState<Record<string, Decision>>({});
+  const [texts, setTexts] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<{ id: string; draft: string } | null>(null);
+  const [result, setResult] = useState<TailoredScore | null>(null);
+  // The server's claim check for the exact text it was sent, so edited text never shows stale flags.
+  const [checked, setChecked] = useState<Record<string, { text: string; flags: ClaimFlag[]; counted: boolean }>>({});
+  const [scoring, setScoring] = useState(false);
+  const [scoreError, setScoreError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState<'pdf' | 'docx' | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const scoreRequest = useRef(0);
 
-  const original = useMemo(() => toPaper(resume), [resume]);
-  const tailored = useMemo(
-    () => tailor(original, jd, score, suggestions.filter(s => appliedIds.has(s.id))),
-    [original, jd, score, suggestions, appliedIds],
+  const load = async () => {
+    setStatus('loading'); setError(null);
+    try {
+      const data = await suggestRewrites(jobId, resumeId);
+      setRewrites(data.rewrites); setDiscarded(data.discarded);
+      setTexts(Object.fromEntries(data.rewrites.map(r => [r.id, r.rewritten])));
+      setDecisions({}); setResult(null); setChecked({});
+      setStatus('ready');
+    } catch (e) { setError(errorText(e)); setStatus('error'); }
+  };
+
+  const accepted = useMemo(
+    () => rewrites.filter(r => decisions[r.id] === 'accepted').map(r => ({ id: r.id, rewritten: texts[r.id] ?? r.rewritten })),
+    [rewrites, decisions, texts],
   );
 
-  const toggle = (id: string) => setSelected(prev => {
-    const next = new Set(prev);
-    if (!next.delete(id)) next.add(id);
+  useEffect(() => {
+    const request = ++scoreRequest.current;
+    if (!accepted.length) { setResult(null); setScoring(false); setScoreError(null); return; }
+    setScoring(true);
+    const timer = setTimeout(async () => {
+      try {
+        const data = await scoreTailored(jobId, resumeId, accepted);
+        if (request !== scoreRequest.current) return;
+        setResult(data); setScoreError(null);
+        setChecked(prev => ({
+          ...prev,
+          ...Object.fromEntries(data.edits.map(e => [e.id, { text: accepted.find(a => a.id === e.id)!.rewritten, flags: e.flags, counted: e.counted }])),
+        }));
+      } catch (e) {
+        if (request === scoreRequest.current) setScoreError(errorText(e));
+      } finally {
+        if (request === scoreRequest.current) setScoring(false);
+      }
+    }, SCORE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [accepted, jobId, resumeId]);
+
+  const flagsFor = (r: BulletRewrite): ClaimFlag[] | null => {
+    const text = texts[r.id] ?? r.rewritten;
+    if (checked[r.id]?.text === text) return checked[r.id].flags;
+    return text === r.rewritten ? r.flags : null;
+  };
+
+  // Clicking the current decision again undoes it.
+  const decide = (id: string, decision: Decision) => setDecisions(prev => {
+    const next = { ...prev };
+    if (next[id] === decision) delete next[id]; else next[id] = decision;
     return next;
   });
 
-  const gain = suggestions.filter(s => selected.has(s.id)).reduce((sum, s) => sum + s.points, 0);
-  const impact = Math.min(Math.round(gain), 100 - score.finalScore);
+  const saveEdit = () => {
+    if (!editing) return;
+    const text = editing.draft.trim();
+    if (text) {
+      setTexts(prev => ({ ...prev, [editing.id]: text }));
+      setDecisions(prev => ({ ...prev, [editing.id]: 'accepted' }));
+    }
+    setEditing(null);
+  };
+
+  const tailoredHistory = useMemo(() => resume.workHistory.map((w, wi) => ({
+    ...w,
+    bullets: w.highlights.map((text, hi) => {
+      const edit = accepted.find(a => a.id === `${wi}-${hi}`);
+      return edit ? { text: edit.rewritten, changed: true } : { text, changed: false };
+    }),
+  })), [resume, accepted]);
+
+  const copyBullets = async () => {
+    const plain = tailoredHistory.map(w => [`${w.role}, ${w.company}`, ...w.bullets.map(b => `- ${b.text}`)].join('\n')).join('\n\n');
+    try { await navigator.clipboard.writeText(plain); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* clipboard blocked */ }
+  };
+
+  if (status === 'idle' || status === 'error') {
+    return (
+      <div className="card flex flex-col items-center gap-3 px-6 py-10 text-center animate-fade-up">
+        <Sparkles className="h-7 w-7 text-brand" />
+        <p className="max-w-md text-sm text-body">
+          Gemini rewrites your work bullets for this job. Every number and skill in a rewrite is then checked against your resume.
+        </p>
+        {error && <p className="text-sm text-bad">{error}</p>}
+        <button onClick={load} className="btn-primary">
+          {status === 'error' ? 'Try again' : 'Suggest rewrites'} <ArrowRight className="h-4 w-4" />
+        </button>
+      </div>
+    );
+  }
+
+  if (status === 'loading') {
+    return (
+      <div className="card flex flex-col items-center justify-center gap-3 py-14">
+        <LoaderCircle className="h-8 w-8 animate-spin text-brand" />
+        <p className="text-sm text-body">Rewriting bullets and checking every claim…</p>
+      </div>
+    );
+  }
+
+  const notCounted = accepted.filter(a => checked[a.id]?.text === a.rewritten && !checked[a.id].counted).length;
+  const flaggedAccepted = rewrites.filter(r => decisions[r.id] === 'accepted' && flagsFor(r)?.some(f => f.severity === 'unsupported')).length;
+
+  const download = async (format: 'pdf' | 'docx') => {
+    setDownloading(format); setDownloadError(null);
+    try { await downloadTailoredResume(resumeId, accepted, format); }
+    catch (e) { setDownloadError(errorText(e)); }
+    finally { setDownloading(null); }
+  };
 
   return (
-    <div className="grid items-start gap-4 animate-fade-up lg:grid-cols-[270px_1fr_auto_1fr]">
-      <div className="space-y-4">
+    <div className="grid items-start gap-4 animate-fade-up lg:grid-cols-[1fr_320px]">
+      <div className="space-y-3">
+        {rewrites.length === 0 ? (
+          <div className="card px-6 py-10 text-center text-sm text-body">
+            Your bullets already read well for this job, so there's nothing to rewrite.
+          </div>
+        ) : rewrites.map(r => {
+          const decision = decisions[r.id];
+          const text = texts[r.id] ?? r.rewritten;
+          const flags = flagsFor(r);
+          const isEditing = editing?.id === r.id;
+          return (
+            <div key={r.id} className={`card p-4 transition-colors ${decision === 'accepted' ? 'border-brand-line' : ''} ${decision === 'rejected' ? 'opacity-60' : ''}`}>
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-xs font-semibold text-ink">{r.role}<span className="font-normal text-muted"> · {r.company}</span></p>
+                {r.targetSkills.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {r.targetSkills.map(s => <span key={s} className="rounded bg-subtle px-1.5 py-0.5 text-[10px] font-semibold text-body">{s}</span>)}
+                  </div>
+                )}
+              </div>
+
+              <p className="mt-2 text-xs leading-relaxed text-muted line-through decoration-muted/50">{r.original}</p>
+              {isEditing ? (
+                <textarea value={editing.draft} onChange={e => setEditing({ id: r.id, draft: e.target.value })} rows={3} maxLength={400} autoFocus
+                  className="mt-1.5 w-full rounded-lg border border-line bg-surface p-2 text-sm text-ink focus:border-brand focus:outline-none" />
+              ) : (
+                <p className="mt-1.5 text-sm leading-relaxed text-ink">{text}</p>
+              )}
+              {r.reason && !isEditing && <p className="mt-1 text-[11px] text-muted">{r.reason}</p>}
+
+              {!isEditing && (flags === null
+                ? <p className="mt-2 text-[11px] text-muted">Your edit is checked when you accept it.</p>
+                : flags.length > 0 && <Flags flags={flags} />)}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {isEditing ? <>
+                  <button onClick={saveEdit} className="btn-primary px-3 py-1.5 text-xs"><Check className="h-3.5 w-3.5" /> Save and accept</button>
+                  <button onClick={() => setEditing(null)} className="btn-secondary px-3 py-1.5 text-xs">Cancel</button>
+                </> : <>
+                  <button onClick={() => decide(r.id, 'accepted')} aria-pressed={decision === 'accepted'}
+                    className={`${decision === 'accepted' ? 'btn-primary' : 'btn-secondary'} px-3 py-1.5 text-xs`}>
+                    <Check className="h-3.5 w-3.5" /> {decision === 'accepted' ? 'Accepted' : 'Accept'}
+                  </button>
+                  <button onClick={() => decide(r.id, 'rejected')} aria-pressed={decision === 'rejected'} className="btn-secondary px-3 py-1.5 text-xs">
+                    <X className="h-3.5 w-3.5" /> {decision === 'rejected' ? 'Rejected' : 'Reject'}
+                  </button>
+                  <button onClick={() => setEditing({ id: r.id, draft: text })} className="btn-secondary px-3 py-1.5 text-xs">
+                    <Pencil className="h-3.5 w-3.5" /> Edit
+                  </button>
+                </>}
+              </div>
+            </div>
+          );
+        })}
+        {discarded > 0 && (
+          <p className="px-1 text-[11px] text-muted">
+            {discarded} suggestion{discarded === 1 ? ' was' : 's were'} dropped because {discarded === 1 ? 'it' : 'they'} didn't match a bullet on your resume or changed nothing.
+          </p>
+        )}
+      </div>
+
+      <div className="space-y-4 lg:sticky lg:top-4">
         <div className="card p-5">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <p className="eyebrow">Suggested Improvements</p>
-            <PreviewBadge>Preview</PreviewBadge>
+          <div className="flex items-center justify-between">
+            <p className="eyebrow">Score Change</p>
+            {scoring && <LoaderCircle className="h-4 w-4 animate-spin text-brand" />}
           </div>
-          {suggestions.length === 0 ? (
-            <p className="text-xs text-body">Your resume already lines up with this job.</p>
-          ) : (
-            <ul className="space-y-1">
-              {suggestions.map(s => {
-                const on = selected.has(s.id);
-                return (
-                  <li key={s.id}>
-                    <button role="checkbox" aria-checked={on} onClick={() => toggle(s.id)}
-                      className="flex w-full items-start gap-2.5 rounded-lg p-2 text-left transition-colors hover:bg-subtle">
-                      <span className={`mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${on ? 'border-brand bg-brand text-white' : 'border-line bg-surface'}`}>
-                        {on && <Check className="h-3 w-3" strokeWidth={3} />}
-                      </span>
-                      <span>
-                        <span className="block text-xs font-semibold text-ink">{s.title}</span>
-                        <span className="block text-[11px] leading-relaxed text-body">{s.detail}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+          {!accepted.length ? (
+            <p className="mt-2 text-xs text-body">Accept a rewrite to rescore your resume with it.</p>
+          ) : scoreError ? (
+            <p className="mt-2 text-xs text-bad">{scoreError}</p>
+          ) : result && (
+            <>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-sm font-semibold text-muted">{result.before.finalScore}</span>
+                <ArrowRight className="h-4 w-4 self-center text-muted" />
+                <span className="text-2xl font-extrabold text-ink">{result.after.finalScore}</span>
+                <Delta before={result.before.finalScore} after={result.after.finalScore} />
+              </div>
+              <dl className="mt-3 space-y-1 text-xs">
+                <div className="flex justify-between"><dt className="text-body">Semantic match</dt>
+                  <dd className="flex gap-2 text-ink">{result.before.semanticScore} → {result.after.semanticScore} <Delta before={result.before.semanticScore} after={result.after.semanticScore} /></dd></div>
+                <div className="flex justify-between"><dt className="text-body">Skill coverage</dt>
+                  <dd className="flex gap-2 text-ink">{result.before.programmaticScore} → {result.after.programmaticScore} <Delta before={result.before.programmaticScore} after={result.after.programmaticScore} /></dd></div>
+              </dl>
+              {result.evidenceUpgrades.length > 0 && (
+                <p className="mt-3 text-xs text-body">
+                  Now shown in your work, not just listed: <span className="font-semibold text-brand-dark">{result.evidenceUpgrades.join(', ')}</span>
+                </p>
+              )}
+              {notCounted > 0 && (
+                <p className="mt-3 rounded-md bg-bad-soft px-2 py-1 text-[11px] text-bad">
+                  {notCounted} accepted rewrite{notCounted === 1 ? '' : 's'} with a claim your resume can't back up {notCounted === 1 ? 'is' : 'are'} left out of this score.
+                </p>
+              )}
+            </>
           )}
-          <button onClick={() => setAppliedIds(new Set(selected))} disabled={!suggestions.length} className="btn-primary mt-3 w-full">
-            Apply Suggestions
-          </button>
+          <p className="mt-3 text-[11px] leading-relaxed text-muted">
+            Rescored with the same model as your match score. Rewording usually moves it only a few points, because the score measures what you did rather than how it's phrased.
+          </p>
         </div>
 
-        <div className="card flex items-center justify-between p-4">
-          <div>
-            <p className="eyebrow">Score Impact</p>
-            <p className="text-[11px] text-muted">Estimated, skills only</p>
+        <div className="card p-5">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="eyebrow">Tailored Experience</p>
+            <button onClick={copyBullets} className="flex items-center gap-1 text-[11px] font-semibold text-body hover:text-ink">
+              <Copy className="h-3.5 w-3.5" /> {copied ? 'Copied' : 'Copy'}
+            </button>
           </div>
-          <span className="flex items-center gap-1 text-base font-bold text-brand">
-            <ArrowUp className="h-4 w-4" />+{impact} points
-          </span>
+          <div className="max-h-96 space-y-3 overflow-y-auto">
+            {tailoredHistory.map((w, wi) => (
+              <div key={`${w.company}-${wi}`}>
+                <p className="text-xs font-semibold text-ink">{w.role}</p>
+                <p className="text-[11px] text-muted">{[w.company, w.duration].filter(Boolean).join(' · ')}</p>
+                <ul className="mt-1 list-disc space-y-1 pl-4">
+                  {w.bullets.map((b, bi) => (
+                    <li key={bi} className={`text-[11px] leading-relaxed ${b.changed ? 'font-medium text-brand-dark' : 'text-body'}`}>{b.text}</li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="eyebrow mb-2">Download</p>
+            <div className="flex gap-2">
+              {(['docx', 'pdf'] as const).map(format => (
+                <button key={format} onClick={() => download(format)} disabled={!!downloading} className="btn-secondary flex-1 px-3 py-1.5 text-xs">
+                  {downloading === format ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                  {format.toUpperCase()}
+                </button>
+              ))}
+            </div>
+            {flaggedAccepted > 0 && (
+              <p className="mt-2 rounded-md bg-warn-soft px-2 py-1 text-[11px] text-warn">
+                {flaggedAccepted} accepted rewrite{flaggedAccepted === 1 ? ' has' : 's have'} a claim your resume can't back up, and {flaggedAccepted === 1 ? 'it is' : 'they are'} included in the download.
+              </p>
+            )}
+            {downloadError && <p className="mt-2 text-[11px] text-bad">{downloadError}</p>}
+            <p className="mt-2 text-[11px] leading-relaxed text-muted">
+              One column, standard headings, no tables or images. Built from your parsed resume, so add your phone number and links before sending. DOCX keeps every character; PDF uses a standard font that lacks some non-Latin letters.
+            </p>
+          </div>
         </div>
       </div>
-
-      <ResumePaper title="Your Resume" paper={original} />
-      <div className="hidden self-center lg:flex">
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-brand text-white"><ArrowRight className="h-4 w-4" /></span>
-      </div>
-      <ResumePaper title="Tailored Resume" paper={tailored} emphasis />
     </div>
   );
 };

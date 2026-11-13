@@ -1,41 +1,8 @@
 // Frontend stand-ins for endpoints that don't exist yet. Signatures are async so
 // each function can later become an apiClient call without touching the screens.
 import {
-  InterviewQuestion, MockFeedback, ParsedJD, ParsedResume, ScoreBreakdown, TailoringSuggestion,
+  InterviewQuestion, MockFeedback, ParsedJD,
 } from '../types';
-
-// Skill coverage carries 40 of the 100 final points (see backend scorer.ts).
-const SKILL_WEIGHT = 40;
-
-export const getTailoringSuggestions = async (
-  resume: ParsedResume, jd: ParsedJD, score: ScoreBreakdown,
-): Promise<TailoringSuggestion[]> => {
-  const perSkill = SKILL_WEIGHT / (score.matchedSkills.length || 1);
-
-  const items: TailoringSuggestion[] = score.matchedSkills
-    .filter(s => s.status !== 'matched')
-    .slice(0, 5)
-    .map((s): TailoringSuggestion => s.status === 'missing'
-      ? { id: `skill:${s.skill}`, kind: 'add-skill', skill: s.skill, points: perSkill,
-          title: `Add ${s.skill} to your skills`, detail: 'Only if you have really used it.' }
-      : { id: `skill:${s.skill}`, kind: 'add-skill', skill: s.skill, points: perSkill / 2,
-          title: `Name ${s.skill} explicitly`, detail: 'Your resume shows something close, but not this exact skill.' });
-
-  const currentRole = resume.workHistory[0]?.role;
-  if (jd.title && currentRole && jd.title.toLowerCase() !== currentRole.toLowerCase()) {
-    items.push({ id: 'headline', kind: 'headline', points: 0,
-      title: 'Align your headline with the role', detail: `Use "${jd.title}" as your resume headline.` });
-  }
-  if (resume.skills.length > 1) {
-    items.push({ id: 'reorder', kind: 'reorder-skills', points: 0,
-      title: 'Lead with relevant skills', detail: 'List the skills this job asks for first.' });
-  }
-  if (resume.workHistory.some(w => w.highlights.some(h => !/\d/.test(h)))) {
-    items.push({ id: 'quantify', kind: 'quantify', points: 0,
-      title: 'Quantify your achievements', detail: 'Add a real number to a bullet that has none.' });
-  }
-  return items;
-};
 
 export const SAMPLE_QUESTIONS: InterviewQuestion[] = [
   { type: 'behavioral', question: 'Tell me about yourself.', answerFramework: ['current role', 'relevant experience', 'why this job'] },

@@ -93,17 +93,39 @@ export interface SavedJob {
   savedAt: string;
 }
 
-// ─── Result tabs that run on frontend previews until their backend exists ────
-export type PreviewMode = 'tailor' | 'mock';
-export type ResultTab = AnalysisMode | PreviewMode;
+// ─── Result tabs that load their own data ────────────────────────────────────
+export type SelfLoadingTab = 'tailor' | 'mock';
+export type ResultTab = AnalysisMode | SelfLoadingTab;
 
-export interface TailoringSuggestion {
-  id: string;
-  kind: 'add-skill' | 'headline' | 'reorder-skills' | 'quantify';
-  title: string;
+// ─── Resume tailoring ────────────────────────────────────────────────────────
+export interface ClaimFlag {
+  kind: 'number' | 'skill' | 'scope' | 'outcome';
+  claim: string;
+  /** unsupported: not on the resume. check: from elsewhere on it, or a bigger role. dropped: left out of the rewrite. */
+  severity: 'unsupported' | 'check' | 'dropped';
   detail: string;
-  skill?: string;
-  points: number;
+}
+
+export interface BulletRewrite {
+  id: string;
+  company: string;
+  role: string;
+  original: string;
+  rewritten: string;
+  targetSkills: string[];
+  reason: string;
+  flags: ClaimFlag[];
+}
+
+export interface TailoringSuggestions { rewrites: BulletRewrite[]; discarded: number; }
+
+export interface BulletEdit { id: string; rewritten: string; }
+
+export interface TailoredScore {
+  before: ScoreBreakdown;
+  after: ScoreBreakdown;
+  edits: { id: string; flags: ClaimFlag[]; counted: boolean }[];
+  evidenceUpgrades: string[];
 }
 
 export interface MockFeedback {
