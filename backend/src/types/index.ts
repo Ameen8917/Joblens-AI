@@ -57,6 +57,8 @@ export interface SkillMatch {
   evidence: EvidenceLevel | null;
   /** The confirmed resume line. Null unless the line was found in the PDF text. */
   quote: string | null;
+  /** For a broad requirement such as "backend development", the concrete resume skills that show it. */
+  shownBy?: string[];
 }
 
 export interface HardCheck {

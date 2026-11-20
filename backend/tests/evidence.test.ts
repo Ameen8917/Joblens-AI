@@ -33,6 +33,29 @@ describe("quoteExists", () => {
   it("rejects everything when the PDF had no text", () => {
     expect(quoteExists("Built payment APIs with Node.js", "")).toBe(false);
   });
+
+  // How a two-column PDF reads: each row runs across both columns, so the left column interrupts wrapped lines.
+  const TWO_COLUMNS = [
+    "SKILLS - Trained PyTorch ranking models that lifted click-through rate",
+    "Python, PyTorch, SQL, Spark by 11% across 30 million daily recommendations",
+    "Airflow, AWS, scikit-learn - Built Spark feature pipelines over 4TB of event data,",
+    "XGBoost, Docker, TensorFlow scheduled with Airflow",
+  ].join("\n");
+
+  it("finds a wrapped line that the other column interrupts", () => {
+    expect(quoteExists("Trained PyTorch ranking models that lifted click-through rate by 11% across 30 million daily recommendations", TWO_COLUMNS)).toBe(true);
+    expect(quoteExists("Built Spark feature pipelines over 4TB of event data, scheduled with Airflow", TWO_COLUMNS)).toBe(true);
+  });
+
+  it("only skips words at the start of the next line, never mid-line", () => {
+    expect(quoteExists("Trained PyTorch models that lifted click-through rate", TWO_COLUMNS)).toBe(false);
+    expect(quoteExists("Trained PyTorch ranking models that lifted click-through rate by 11% 30 million", TWO_COLUMNS)).toBe(false);
+  });
+
+  it("doesn't skip more than a column's worth of words", () => {
+    const far = "Led the migration of\none two three four five six seven eight nine ten the billing service";
+    expect(quoteExists("Led the migration of the billing service", far)).toBe(false);
+  });
 });
 
 describe("mentionsSkill", () => {
@@ -82,5 +105,14 @@ describe("gradeEvidence", () => {
 
   it("marks a real line that doesn't name the skill unverified", () => {
     expect(grade("python", LINE, "experience")).toBe("unverified");
+  });
+
+  it("confirms a skills-list quote of just the name as listed when the name is in the PDF", () => {
+    expect(grade("docker", "Docker", "skills_list")).toBe("listed");
+    expect(grade("rust", "Rust", "skills_list")).toBe("unverified");
+  });
+
+  it("never treats a bare name as demonstrated work", () => {
+    expect(grade("docker", "Docker", "experience")).toBe("unverified");
   });
 });

@@ -45,8 +45,10 @@ const SkillChips = ({ skills, cls }: { skills: SkillMatch[]; cls: string }) => (
 );
 
 const SkillEvidence = ({ skills }: { skills: SkillMatch[] }) => {
-  const found = skills.filter(s => s.status !== 'missing');
-  if (found.length === 0) return null;
+  // Broad requirements are shown by other skills, so they get their own group rather than borrowing a quote.
+  const broad = skills.filter(s => s.status !== 'missing' && s.shownBy?.length);
+  const found = skills.filter(s => s.status !== 'missing' && !s.shownBy?.length);
+  if (found.length === 0 && broad.length === 0) return null;
   const at = (level: EvidenceLevel) => found.filter(s => s.evidence === level);
   const demonstrated = at('demonstrated');
   const listed = at('listed');
@@ -78,6 +80,18 @@ const SkillEvidence = ({ skills }: { skills: SkillMatch[] }) => {
             ? 'No lines could be checked. This happens with scanned PDFs and resumes uploaded before this check existed, so try uploading it again.'
             : 'No line naming these skills could be confirmed in your resume text.'}>
           <SkillChips skills={unverified} cls="bg-subtle text-body" />
+        </EvidenceGroup>
+      )}
+      {broad.length > 0 && (
+        <EvidenceGroup title={`Broad requirements (${broad.length})`} hint="Areas rather than single skills, met by at least two related skills on your resume.">
+          <ul className="space-y-1.5">
+            {broad.map(s => (
+              <li key={s.skill} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="rounded-md bg-good-soft px-2 py-0.5 text-[11px] font-medium text-good">{s.skill}</span>
+                <span className="text-xs text-body">shown by {s.shownBy!.join(', ')}</span>
+              </li>
+            ))}
+          </ul>
         </EvidenceGroup>
       )}
     </div>

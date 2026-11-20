@@ -79,6 +79,59 @@ const strongestEvidence = (jdSkill: string, status: "matched" | "partial", evide
   return { evidence: best.level, quote: best.quote };
 };
 
+/**
+ * Concrete skills that show a broad area. Jobs often list areas such as "backend development" or "infrastructure"
+ * as required skills, which no resume names word for word, so they counted as missing for strong candidates.
+ */
+const AREA_SIGNALS: Record<string, string[]> = {
+  backend: ["node.js", "java", "python", "go", "c#", "ruby", "php", "rust", "postgresql", "mysql", "sql", "mongodb", "redis", "rest", "graphql", "grpc", "spring boot", "django", "express", "fastapi", "microservices", "kafka"],
+  frontend: ["react", "vue", "angular", "svelte", "javascript", "typescript", "css", "html", "next.js", "tailwind css", "redux"],
+  api: ["rest", "graphql", "grpc", "express", "fastapi", "django", "spring boot", "openapi"],
+  infrastructure: ["kubernetes", "terraform", "aws", "gcp", "azure", "docker", "ansible", "linux", "prometheus", "helm"],
+  platform: ["kubernetes", "terraform", "docker", "aws", "gcp", "azure", "helm"],
+  cloud: ["aws", "gcp", "azure", "kubernetes", "terraform"],
+  devops: ["kubernetes", "docker", "terraform", "jenkins", "ansible", "ci cd", "github actions", "gitlab ci"],
+  data: ["sql", "spark", "airflow", "kafka", "pandas", "dbt", "snowflake", "bigquery", "hadoop"],
+  mobile: ["swift", "kotlin", "react native", "flutter", "ios", "android"],
+  database: ["postgresql", "mysql", "mongodb", "sql", "redis", "dynamodb", "cassandra"],
+};
+AREA_SIGNALS.web = [...AREA_SIGNALS.frontend, ...AREA_SIGNALS.backend];
+AREA_SIGNALS.databases = AREA_SIGNALS.database;
+AREA_SIGNALS.apis = AREA_SIGNALS.api;
+
+// Words that describe the kind of work rather than the area, as in "backend development" or "API design".
+const AREA_FILLER = new Set(["development", "developer", "engineering", "design", "architecture", "operations", "programming", "systems", "services", "experience", "skills", "work"]);
+const MIN_AREA_SIGNALS = 2;
+
+/** The areas a broad skill names, or null when it isn't made only of area words, like "react" or "machine learning". */
+const broadAreas = (skill: string): string[] | null => {
+  const areas = normalizeSkill(skill).filter(word => !AREA_FILLER.has(word));
+  return areas.length > 0 && areas.every(area => area in AREA_SIGNALS) ? areas : null;
+};
+
+/**
+ * Matches a broad skill when the resume has at least two concrete skills from each area it names: Node.js and
+ * PostgreSQL show "backend development". Evidence comes from those skills' own graded quotes.
+ */
+const matchBroadSkill = (jdSkill: string, candidateSkills: string[], evidence: SkillEvidence[]): SkillMatch | null => {
+  const areas = broadAreas(jdSkill);
+  if (!areas) return null;
+  const shownBy: string[] = [];
+  for (const area of areas) {
+    const signals = candidateSkills.filter(skill => AREA_SIGNALS[area].some(signal => skillsMatch(signal, skill) === "matched"));
+    const distinct = [...new Map(signals.map(s => [s.toLowerCase(), s])).values()];
+    if (distinct.length < MIN_AREA_SIGNALS) return null;
+    shownBy.push(...distinct.filter(s => !shownBy.includes(s)));
+  }
+  const best = evidence
+    .filter(item => item.level !== "unverified" && shownBy.some(skill => skillsMatch(skill, item.skill) === "matched"))
+    .sort((a, b) => EVIDENCE_RANK[b.level] - EVIDENCE_RANK[a.level])[0];
+  return {
+    skill: jdSkill, status: "matched", shownBy,
+    evidence: best?.level ?? "unverified", quote: best?.quote ?? null,
+  };
+};
+
 /** Cosine similarities at or below floor score 0, and at or above ceiling score 100. */
 export interface SemanticCalibration { floor: number; ceiling: number }
 
@@ -112,14 +165,17 @@ export const computeScore = (
       if (m === "matched") { best = "matched"; break; }
       if (m === "partial" && best == null) best = "partial";
     }
+    const broad = best ? null : matchBroadSkill(jdSkill, candidateSkills, skillEvidence);
     matchedSkills.push(best
       ? { skill: jdSkill, status: best, ...strongestEvidence(jdSkill, best, skillEvidence) }
-      : { skill: jdSkill, status: "missing", evidence: null, quote: null });
-    if (!best) missingRequired.push(jdSkill);
+      : broad ?? { skill: jdSkill, status: "missing", evidence: null, quote: null });
+    if (!best && !broad) missingRequired.push(jdSkill);
   }
 
   for (const jdSkill of jd.niceToHaveSkills) {
-    if (!candidateSkills.some(rs => skillsMatch(jdSkill, rs))) missingNiceToHave.push(jdSkill);
+    if (!candidateSkills.some(rs => skillsMatch(jdSkill, rs)) && !matchBroadSkill(jdSkill, candidateSkills, skillEvidence)) {
+      missingNiceToHave.push(jdSkill);
+    }
   }
 
   const totalRequired = jd.requiredSkills.length;

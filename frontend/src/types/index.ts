@@ -31,6 +31,8 @@ export interface SkillMatch {
   status: 'matched' | 'missing' | 'partial';
   evidence: EvidenceLevel | null;
   quote: string | null;
+  /** For a broad requirement such as "backend development", the concrete resume skills that show it. */
+  shownBy?: string[];
 }
 
 export interface HardCheck {
