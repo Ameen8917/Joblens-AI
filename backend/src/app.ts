@@ -4,6 +4,7 @@ import jobRoutes from "./routes/jobs";
 import resumeRoutes from "./routes/resumes";
 import analyzeRoutes from "./routes/analyze";
 import tailorRoutes from "./routes/tailor";
+import interviewRoutes from "./routes/interview";
 import { errorHandler } from "./middleware/errorHandler";
 
 export const createApp = (): Application => {
@@ -16,6 +17,7 @@ export const createApp = (): Application => {
   app.use("/api/resumes", resumeRoutes);
   app.use("/api/analyze", analyzeRoutes);
   app.use("/api/tailor", tailorRoutes);
+  app.use("/api/interview", interviewRoutes);
   app.use((_req: Request, res: Response) => res.status(404).json({ success: false, error: "Route not found" }));
   app.use(errorHandler);
   return app;

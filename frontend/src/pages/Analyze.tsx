@@ -91,6 +91,7 @@ export default function AnalyzePage() {
   const [modeData,     setModeData]     = useState<Record<string, unknown>>({});
   // Kept mounted once opened, so switching tabs doesn't lose the user's decisions or spend another Gemini call.
   const [tailorOpened, setTailorOpened] = useState(false);
+  const [mockOpened, setMockOpened] = useState(false);
   const [jdLoading,      setJdLoading]      = useState(false);
   const [resumeLoading,  setResumeLoading]  = useState(false);
   const [scoreLoading,   setScoreLoading]   = useState(false);
@@ -136,7 +137,7 @@ export default function AnalyzePage() {
 
   const handleJDSubmit = async (text: string) => {
     const isCurrent = trackSession();
-    setJdLoading(true); setError(null); setScore(null); setModeData({}); setTailorOpened(false);
+    setJdLoading(true); setError(null); setScore(null); setModeData({}); setTailorOpened(false); setMockOpened(false);
     try {
       const { jobId: id, parsed } = await parseJD(text);
       if (!isCurrent()) return;
@@ -147,7 +148,7 @@ export default function AnalyzePage() {
 
   const handleResumeSubmit = async (file: File) => {
     const isCurrent = trackSession();
-    setResumeLoading(true); setError(null); setScore(null); setModeData({}); setTailorOpened(false);
+    setResumeLoading(true); setError(null); setScore(null); setModeData({}); setTailorOpened(false); setMockOpened(false);
     try {
       const { resumeId: id, parsed } = await parseResume(file);
       if (!isCurrent()) return;
@@ -159,6 +160,7 @@ export default function AnalyzePage() {
   const handleMode = useCallback(async (m: ResultTab) => {
     setMode(m);
     if (m === 'tailor') setTailorOpened(true);
+    if (m === 'mock') setMockOpened(true);
     if (m === 'tailor' || m === 'mock') return; // these tabs load their own data
     if (!jobId || !resumeId || modeData[m]) return;
     const isCurrent = trackSession();
@@ -174,7 +176,7 @@ export default function AnalyzePage() {
   const reset = () => {
     startSession();
     setJobId(null); setResumeId(null); setParsedJD(null); setParsedResume(null);
-    setScore(null); setScoreMs(null); setModeData({}); setTailorOpened(false); setError(null); setActiveJobId(undefined); setMode(settings.defaultTab);
+    setScore(null); setScoreMs(null); setModeData({}); setTailorOpened(false); setMockOpened(false); setError(null); setActiveJobId(undefined); setMode(settings.defaultTab);
     navigate('/');
   };
 
@@ -183,7 +185,7 @@ export default function AnalyzePage() {
     startSession();
     const isCurrent = trackSession();
     setActiveJobId(job.id); setJobId(job.jobId); setResumeId(job.resumeId);
-    setScore(null); setModeData({}); setTailorOpened(false); setError(null); setParsedJD(null); setParsedResume(null);
+    setScore(null); setModeData({}); setTailorOpened(false); setMockOpened(false); setError(null); setParsedJD(null); setParsedResume(null);
     try {
       const [, jd, resume] = await Promise.all([
         timedScore(job.jobId, job.resumeId),
@@ -308,8 +310,11 @@ export default function AnalyzePage() {
                     : <div className="card px-6 py-10 text-center text-sm text-body">Resume details aren’t available for this saved job.</div>}
                 </div>
               )}
-              {mode === 'mock' && <MockInterview key={`${jobId}_${resumeId}`} jd={parsedJD}
-                questions={(modeData.interview as InterviewPrepData | undefined)?.questions} />}
+              {(mode === 'mock' || mockOpened) && jobId && resumeId && (
+                <div hidden={mode !== 'mock'}>
+                  <MockInterview key={`${jobId}_${resumeId}`} jobId={jobId} resumeId={resumeId} />
+                </div>
+              )}
 
               {!isSelfLoadingTab && !modeData[mode] && !analyzeLoading && (
                 <div className="card flex flex-col items-center gap-3 px-6 py-10 text-center">

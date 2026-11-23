@@ -2,7 +2,7 @@
 
 > **Know your fit before you apply.**
 
-A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four AI-powered analysis modes, plus resume tailoring with checked claims and a mock interview preview.
+A structured job-fit intelligence tool built with the MERN stack, TypeScript, and Google Gemini AI. JobLens goes beyond keyword matching — it parses both your resume and the job description into structured JSON, scores the match using a hybrid semantic + programmatic engine, and delivers four AI-powered analysis modes, plus resume tailoring with checked claims and a live mock interview.
 
 ---
 
@@ -34,6 +34,9 @@ A structured job-fit intelligence tool built with the MERN stack, TypeScript, an
 | Tailoring rewrites that invent a number or skill | 0% (19 rewrites) |
 | Tailoring rewrites that drop a skill or inflate responsibility | 0%, down from 36% with the first prompt |
 | Tailoring rewrites flagged for a vague benefit ("improving reliability") | 11% |
+| Interview answers scored within their labelled band (7 hand-written answers) | 100% |
+| Interview follow-ups asked when expected, and contradictions with the resume caught | 100% / 100% |
+| Interview scores above 3 backed by a quote confirmed in the answer | 100% |
 
 Gemini responses are cached under a key covering the model, schema and prompt. A scoring-logic change replays in about a second with no API calls, and a prompt or model change calls Gemini again. The run fails if any metric drops more than 5 points below the committed baseline.
 
@@ -57,8 +60,12 @@ The eval found 8 bugs, all now fixed: requirement checks that ignored a city ins
 - Rewording moves the score only a few points (−2 to +4 in the eval), because the score measures what you did rather than how it's phrased
 - **ATS-friendly export** — download the tailored resume as DOCX or PDF: one column, standard headings, real text, no tables or images. A test reads the exported PDF back with the same text extractor used for uploads and checks every bullet comes out whole and in order. It's built from the parsed resume, so phone numbers and links need adding before sending
 
-### Preview
-**Mock Interview** (with optional voice input) runs in the browser on rule-based logic until its backend exists. It is labelled as a preview in the app.
+### Live Mock Interview
+- **Planned from your resume and the job** — about half the questions go deeper on specific resume lines that matter for the job, the rest test a requirement the resume shows least clearly, plus one behavioral question. Resume lines are checked to exist, as in tailoring
+- **Scored with a rubric** — structure, specifics and relevance, 1 to 5 each. Every score above 3 must quote the candidate's own words, and code confirms each quote is really in the answer. A high score without one is held at 3
+- **Checked against the resume** — a figure that differs from the resume line under discussion ("resume says 120ms, you said 300ms") is flagged and always earns a follow-up. A skill the resume doesn't show is flagged too
+- **Streamed follow-ups** — when an answer has a weak spot, the interviewer asks one follow-up, streamed word by word over server-sent events. Scoring happens before the stream starts, so a failure is an ordinary error and nothing is saved
+- **Report** — built in code from the stored scores: overall and per-criterion results, strongest and weakest answers, resume inconsistencies and what to practise. Answer by voice, and optionally hear the questions read aloud, using the browser's own speech APIs
 
 ### Smart Parsing Pipeline
 - JD text → Gemini 2.5 Flash → structured JSON (required skills, nice-to-have, YOE, tools, culture signals, responsibilities)
@@ -137,12 +144,14 @@ joblens-ai/
 │   │   │   ├── scorer.ts          # Hybrid scoring engine (cosine + programmatic)
 │   │   │   ├── tailor.ts          # Bullet rewrites, claim checks and the tailored score
 │   │   │   ├── resumeExport.ts    # ATS-friendly PDF and DOCX export
+│   │   │   ├── interview.ts       # Interview planning, grounded scoring, follow-ups and report
 │   │   │   └── modePrompts.ts     # 4 mode-specific Gemini prompts
 │   │   ├── routes/
 │   │   │   ├── jobs.ts            # POST /api/jobs/parse, GET /api/jobs/:id
 │   │   │   ├── resumes.ts         # POST /api/resumes/parse, GET /api/resumes/:id
 │   │   │   ├── analyze.ts         # POST /api/analyze, POST /api/analyze/score-only
-│   │   │   └── tailor.ts          # POST /api/tailor/suggest, /score and /export
+│   │   │   ├── tailor.ts          # POST /api/tailor/suggest, /score and /export
+│   │   │   └── interview.ts       # Interview sessions, answers (streamed) and reports
 │   │   ├── middleware/
 │   │   │   ├── upload.ts          # Multer PDF config (5MB, memory storage)
 │   │   │   └── errorHandler.ts    # Global error handler + asyncHandler wrapper
@@ -164,7 +173,7 @@ joblens-ai/
     │   │   ├── resumes.ts         # parseResume (multipart), getResume
     │   │   ├── analyze.ts         # analyze (4 modes), scoreOnly
     │   │   ├── tailor.ts          # suggestRewrites, scoreTailored, downloadTailoredResume
-    │   │   └── preview.ts         # Browser stand-in for the mock interview
+    │   │   └── interview.ts       # startInterview, submitAnswer (reads the event stream), finishInterview
     │   ├── components/ui/
     │   │   ├── ScoreCard.tsx      # Score circle + semantic/programmatic bars
     │   │   ├── SkillGrid.tsx      # Matched / partial / missing pills + skill evidence
@@ -172,7 +181,7 @@ joblens-ai/
     │   │   ├── ModeTabs.tsx       # 6-tab switcher
     │   │   ├── ModeResults.tsx    # FitResult, GapResult, CoverLetterResult, InterviewResult
     │   │   ├── ResumeTailoring.tsx # Accept, reject or edit rewrites, flags and score change
-    │   │   ├── MockInterview.tsx  # Mock interview preview with voice input
+    │   │   ├── MockInterview.tsx  # Live interview, feedback with checked quotes, report
     │   │   ├── JDInput.tsx        # Textarea → collapses to badge on parse
     │   │   ├── ResumeUpload.tsx   # Drag-and-drop PDF zone
     │   │   └── JobSidebar.tsx     # Navigation + saved jobs with score badges
@@ -336,6 +345,15 @@ Field: resume (PDF file, max 5MB)
 ```
 Each `id` is `<work entry>-<bullet>`, as returned by `/suggest`.
 
+### Interview
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/interview/sessions` | Plan an interview. Body: `jobId`, `resumeId`, `questionCount` (2 to 6, default 4) |
+| `GET` | `/api/interview/sessions/:id` | The session so far |
+| `POST` | `/api/interview/sessions/:id/answers` | Answer the current question. Responds with server-sent events: `evaluation`, then `token` for each piece of a follow-up, then `done` with the saved session |
+| `POST` | `/api/interview/sessions/:id/skip` | Move past the current question |
+| `POST` | `/api/interview/sessions/:id/finish` | End the interview and build the report |
+
 ### Health
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -393,7 +411,7 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 - **Gemini rate limits** — the free tier has request limits. Requests are retried, but heavy use can still fail
 - **No auth** — there are no user accounts, so anyone with a resume ID can read that stored resume. Saved jobs live in browser localStorage
 - **Calibrated and tuned on a small set** — the semantic calibration and the rule fixes come from 18 synthetic pairs. Re-measure with more and real resumes, and after any change to the embedding model or the embedded text
-- **Mock Interview** is a rule-based preview, not yet AI-backed
+- **The interview eval covers the extremes** — its 7 answers are clearly strong or clearly weak, and the scorer gave them 5s and 1s. How well it separates middling answers isn't measured yet
 - **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. For two-column layouts, a quote may leave out up to 8 words at the start of a wrapped line and still count, because those words can't be told apart from the other column
 - **Place matching uses a built-in list** — US states, Canadian provinces, countries and common regions. A city outside it still matches by name, but can't be placed inside a larger area
 
@@ -401,7 +419,6 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 
 ## ✦ Roadmap
 
-- [ ] Live mock interview with streamed follow-up questions
 - [ ] Live demo, CI and a one-command Docker setup
 
 ---
