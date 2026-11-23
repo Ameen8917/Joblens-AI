@@ -130,10 +130,58 @@ export interface TailoredScore {
   evidenceUpgrades: string[];
 }
 
-export interface MockFeedback {
+// ─── Mock interview ──────────────────────────────────────────────────────────
+export interface InterviewFocus {
+  kind: 'resume_claim' | 'job_requirement' | 'behavioral';
+  requirement: string;
+  bulletId: string | null;
+  bullet: string | null;
+}
+
+export interface InterviewTurn {
+  role: 'interviewer' | 'candidate';
+  kind: 'question' | 'follow_up' | 'answer';
+  text: string;
+}
+
+/** Scored 1 to 5. Quotes are confirmed to be in the candidate's own words; capped means a high score lacked one. */
+export interface CriterionScore { score: number; quotes: string[]; note: string; capped: boolean; }
+
+export interface ConsistencyFlag { kind: 'contradiction' | 'not_on_resume'; claim: string; detail: string; }
+
+export interface AnswerEvaluation {
+  structure: CriterionScore;
+  specifics: CriterionScore;
+  relevance: CriterionScore;
   overall: number;
-  structure: number;
-  content: number;
-  relevance: number;
+  tip: string;
+  consistency: ConsistencyFlag[];
+  followUp: { needed: boolean; reason: 'vague' | 'incomplete' | 'inconsistent' | 'none' };
+}
+
+export interface InterviewExchange {
+  focus: InterviewFocus;
+  turns: InterviewTurn[];
+  evaluation: AnswerEvaluation | null;
+  followUpAsked: boolean;
+  done: boolean;
+}
+
+export interface InterviewReport {
+  overall: number;
+  byCriterion: { structure: number; specifics: number; relevance: number };
+  strongest: number | null;
+  weakest: number | null;
+  answered: number;
+  consistency: (ConsistencyFlag & { question: number })[];
   tips: string[];
+}
+
+export interface InterviewSessionState {
+  sessionId: string;
+  jobId: string;
+  resumeId: string;
+  status: 'active' | 'finished';
+  exchanges: InterviewExchange[];
+  report: InterviewReport | null;
 }

@@ -14,5 +14,11 @@
   "similarityRanking": 1,
   "tailorRewritesKept": 1,
   "tailorRewritesClean": 0.9583333333333334,
-  "tailorRewritesSupported": 1
+  "tailorRewritesSupported": 1,
+  "interviewScoreBands": 1,
+  "interviewFollowUps": 1,
+  "interviewContradictions": 1,
+  "interviewHighScoresBacked": 1,
+  "interviewFollowUpsWellFormed": 1,
+  "interviewPlanBulletsValid": 1
 }

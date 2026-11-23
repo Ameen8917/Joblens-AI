@@ -82,6 +82,33 @@ export const generateStructured = async <S extends z.ZodTypeAny>(schema: S, part
   }
 };
 
+/**
+ * Streams plain text, passing each piece to onChunk as it arrives, and returns the whole text. Failures are retried
+ * only while opening the stream: once words have reached the user they can't be taken back. A cached response
+ * arrives as one chunk.
+ */
+export const streamText = async (prompt: string, onChunk: (text: string) => void): Promise<string> => {
+  const key = requestKey({ model: FLASH_MODEL, temperature: TEMPERATURE, stream: true, prompt });
+  const cached = responseCache?.get(key);
+  if (typeof cached === "string") { onChunk(cached); return cached; }
+  if (!flashModel) throw new Error("Gemini not initialized");
+  try {
+    const result = await withRetry(() => flashModel.generateContentStream({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: TEMPERATURE },
+    }), { isRetryable: isRetryableGeminiError });
+    let text = "";
+    for await (const chunk of result.stream) {
+      const piece = chunk.text();
+      if (piece) { text += piece; onChunk(piece); }
+    }
+    responseCache?.set(key, text);
+    return text;
+  } catch (error) {
+    throw toAppError(error);
+  }
+};
+
 export const generateEmbedding = async (text: string): Promise<number[]> => {
   const key = requestKey({ model: EMBEDDING_MODEL, text });
   const cached = responseCache?.get(key);

@@ -20,9 +20,9 @@ export const RewriteSchema = z.object({
 
 type WorkEntry = ParsedResume["workHistory"][number];
 
-const bulletId = (work: number, highlight: number): string => `${work}-${highlight}`;
+export const bulletId = (work: number, highlight: number): string => `${work}-${highlight}`;
 
-const findBullet = (resume: ParsedResume, id: string): { work: WorkEntry; text: string } | null => {
+export const findBullet = (resume: ParsedResume, id: string): { work: WorkEntry; text: string } | null => {
   const match = /^(\d+)-(\d+)$/.exec(id.trim());
   if (!match) return null;
   const work = resume.workHistory[Number(match[1])];
@@ -34,14 +34,14 @@ const findBullet = (resume: ParsedResume, id: string): { work: WorkEntry; text: 
 const roleText = (work: WorkEntry): string => [work.role, work.company, work.duration, ...work.highlights].join("\n");
 
 /** Falls back to the parsed fields when the PDF text isn't available. */
-const wholeResumeText = (resume: ParsedResume, rawText: string): string => rawText.trim() || [
+export const wholeResumeText = (resume: ParsedResume, rawText: string): string => rawText.trim() || [
   ...resume.skills, ...resume.tools,
   ...resume.workHistory.map(roleText),
   ...resume.projects.map(p => [p.name, p.description, ...p.techStack].join(" ")),
 ].join("\n");
 
 /** The skills a rewrite is likely to name: the job's, which the model is asked to bring out, and the resume's own. */
-const skillVocabulary = (jd: ParsedJD, resume: ParsedResume): string[] =>
+export const skillVocabulary = (jd: ParsedJD, resume: ParsedResume): string[] =>
   [...new Set([...jd.requiredSkills, ...jd.niceToHaveSkills, ...jd.tools, ...resume.skills, ...resume.tools]
     .map(s => s.trim().toLowerCase()).filter(Boolean))];
 

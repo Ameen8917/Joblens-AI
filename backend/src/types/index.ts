@@ -149,6 +149,82 @@ export interface TailoredScore {
   evidenceUpgrades: string[];
 }
 
+// ─── Mock interview ──────────────────────────────────────────────────────────
+
+/** What a question probes: a line of the resume, a requirement of the job, or a general behavioral question. */
+export interface InterviewFocus {
+  kind: "resume_claim" | "job_requirement" | "behavioral";
+  requirement: string;
+  /** "work index-highlight index", checked against the resume. Null unless kind is resume_claim. */
+  bulletId: string | null;
+  /** The resume line itself, taken from the resume rather than from the model. */
+  bullet: string | null;
+}
+
+export interface InterviewTurn {
+  role: "interviewer" | "candidate";
+  kind: "question" | "follow_up" | "answer";
+  text: string;
+}
+
+/** One rubric criterion, scored 1 to 5. Quotes are confirmed to appear in the candidate's own words. */
+export interface CriterionScore {
+  score: number;
+  quotes: string[];
+  note: string;
+  /** True when the model scored above 3 without a quote that could be confirmed, so the score was lowered to 3. */
+  capped: boolean;
+}
+
+/**
+ * Something the answer says that the resume doesn't back. contradiction: a number that differs from the resume line
+ * the question is about. not_on_resume: a skill the resume doesn't show anywhere.
+ */
+export interface ConsistencyFlag {
+  kind: "contradiction" | "not_on_resume";
+  claim: string;
+  detail: string;
+}
+
+export interface AnswerEvaluation {
+  structure: CriterionScore;
+  specifics: CriterionScore;
+  relevance: CriterionScore;
+  /** 0 to 100, from the three criteria. */
+  overall: number;
+  tip: string;
+  consistency: ConsistencyFlag[];
+  followUp: { needed: boolean; reason: "vague" | "incomplete" | "inconsistent" | "none" };
+}
+
+export interface InterviewExchange {
+  focus: InterviewFocus;
+  turns: InterviewTurn[];
+  /** Covers every answer in the exchange, including the one to the follow-up. */
+  evaluation: AnswerEvaluation | null;
+  followUpAsked: boolean;
+  done: boolean;
+}
+
+export interface InterviewReport {
+  overall: number;
+  byCriterion: { structure: number; specifics: number; relevance: number };
+  strongest: number | null;
+  weakest: number | null;
+  answered: number;
+  consistency: (ConsistencyFlag & { question: number })[];
+  tips: string[];
+}
+
+export interface InterviewSessionState {
+  sessionId: string;
+  jobId: string;
+  resumeId: string;
+  status: "active" | "finished";
+  exchanges: InterviewExchange[];
+  report: InterviewReport | null;
+}
+
 export interface ApiError {
   success: false;
   error: string;

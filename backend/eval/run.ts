@@ -11,16 +11,18 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import dotenv from "dotenv";
-import { DAILY_QUOTA_MESSAGE, initGemini, setResponseCache } from "../src/config/gemini";
+import { DAILY_QUOTA_MESSAGE, generateStructured, initGemini, setResponseCache } from "../src/config/gemini";
 import { MIN_QUOTE_CHARS, quoteExists } from "../src/services/evidence";
 import { extractJD } from "../src/services/jdParser";
 import { extractResume } from "../src/services/resumeParser";
-import { scoreTailored, suggestRewrites } from "../src/services/tailor";
+import { bulletId, findBullet, scoreTailored, suggestRewrites } from "../src/services/tailor";
+import { buildPlanPrompt, DEFAULT_QUESTIONS, evaluateExchange, PlanSchema, streamFollowUp } from "../src/services/interview";
 import {
   combineScores, computeScore, cosineSimilarity, mentionsSkill, SEMANTIC_CALIBRATION, toSemanticScore,
 } from "../src/services/scorer";
-import { BulletRewrite, EvidenceLevel, ParsedJD, ParsedResume } from "../src/types";
+import { BulletRewrite, EvidenceLevel, InterviewExchange, InterviewFocus, ParsedJD, ParsedResume } from "../src/types";
 import { Fit, JOBS, PAIRS, RESUMES } from "./cases";
+import { CLAIM_BULLET, Criterion, INTERVIEW_CASES, INTERVIEW_PAIR, InterviewCase } from "./interviewCases";
 import {
   accepts, compareSkills, findRegressions, fitFromScore, rankingAccuracy, ratio, sameSkill, suggestCalibration,
 } from "./metrics";
@@ -311,6 +313,79 @@ const main = async () => {
     say(`final score change: mean ${mean >= 0 ? "+" : ""}${mean.toFixed(1)}, range ${Math.min(...finalChanges)} to ${Math.max(...finalChanges)}`);
   }
 
+  // ---------- Mock interview ----------
+  heading(`Mock interview (${INTERVIEW_PAIR.resume} x ${INTERVIEW_PAIR.job})`);
+  let bandsOk = 0, bandsTotal = 0, followUpOk = 0, contradictionOk = 0, interviewCases = 0;
+  let highBacked = 0, highCapped = 0, followUpsWellFormed = 0, followUpsAsked = 0, planBulletsValid = 0, planBullets = 0;
+  const interviewJob = jobs.get(INTERVIEW_PAIR.job), interviewResume = resumes.get(INTERVIEW_PAIR.resume);
+  if (interviewJob && interviewResume) {
+    const { parsed: jd } = interviewJob;
+    const { parsed: resume, rawText } = interviewResume;
+    const claimId = resume.workHistory.flatMap((w, wi) => w.highlights.map((h, hi) => ({ h, id: bulletId(wi, hi) }))).find(b => CLAIM_BULLET.test(b.h));
+    if (!claimId) failures.push(`interview: no resume line matches ${CLAIM_BULLET}`);
+    const focusFor = (c: InterviewCase): InterviewFocus => c.focus === "claim" && claimId
+      ? { kind: "resume_claim", requirement: "postgresql", bulletId: claimId.id, bullet: claimId.h }
+      : { kind: "behavioral", requirement: "", bulletId: null, bullet: null };
+
+    const runs = await mapLimit(INTERVIEW_CASES, CONCURRENCY, c => attempt(`interview ${c.id}`, async () => {
+      const exchange: InterviewExchange = {
+        focus: focusFor(c), evaluation: null, followUpAsked: false, done: false,
+        turns: [{ role: "interviewer", kind: "question", text: c.question }, { role: "candidate", kind: "answer", text: c.answer }],
+      };
+      const evaluation = await evaluateExchange(jd, resume, rawText, exchange);
+      const followUp = evaluation.followUp.needed ? await streamFollowUp(jd, exchange, evaluation, "", () => undefined) : null;
+      return { evaluation, followUp };
+    }));
+
+    INTERVIEW_CASES.forEach((c, i) => {
+      const run = runs[i];
+      if (!run.ok) { failures.push(`interview ${c.id}: ${run.error}`); return; }
+      const { evaluation, followUp } = run.value;
+      interviewCases++;
+      const caseProblems: string[] = [];
+      for (const [criterion, [min, max]] of Object.entries(c.bands) as [Criterion, [number, number]][]) {
+        bandsTotal++;
+        const { score } = evaluation[criterion];
+        if (score >= min && score <= max) bandsOk++;
+        else caseProblems.push(`${criterion} scored ${score}, expected ${min} to ${max} (${evaluation[criterion].note})`);
+      }
+      for (const criterion of ["structure", "specifics", "relevance"] as Criterion[]) {
+        const scored = evaluation[criterion];
+        if (scored.capped) highCapped++; else if (scored.score > 3) highBacked++;
+      }
+      if (evaluation.followUp.needed === c.followUp) followUpOk++;
+      else caseProblems.push(`follow-up ${evaluation.followUp.needed ? `asked (${evaluation.followUp.reason})` : "not asked"}, expected ${c.followUp ? "one" : "none"}`);
+      const contradicted = evaluation.consistency.some(f => f.kind === "contradiction");
+      if (contradicted === c.contradiction) contradictionOk++;
+      else caseProblems.push(`contradiction with the resume ${contradicted ? "flagged" : "missed"}`);
+      if (followUp !== null) {
+        followUpsAsked++;
+        const words = followUp.split(/\s+/).filter(Boolean).length;
+        if ((followUp.match(/\?/g) ?? []).length === 1 && followUp.endsWith("?") && words <= 35) followUpsWellFormed++;
+        else caseProblems.push(`follow-up isn't one short question: "${followUp}"`);
+      }
+      say(`${c.id}: structure ${evaluation.structure.score}, specifics ${evaluation.specifics.score}, relevance ${evaluation.relevance.score}, ` +
+        `overall ${evaluation.overall}, follow-up ${followUp !== null ? `"${followUp}"` : "none"}`);
+      caseProblems.forEach(problem);
+    });
+
+    // Planning: do resume questions point at real bullets?
+    const planPairs = [INTERVIEW_PAIR, { resume: "sre-staff", job: "platform-staff" }];
+    const plans = await mapLimit(planPairs, CONCURRENCY, pair => attempt(`plan ${pair.resume} x ${pair.job}`, async () => {
+      const planJob = jobs.get(pair.job)!, planResume = resumes.get(pair.resume)!;
+      return generateStructured(PlanSchema, [{ text: buildPlanPrompt(planJob.parsed, planResume.parsed, DEFAULT_QUESTIONS) }]);
+    }));
+    planPairs.forEach((pair, i) => {
+      const run = plans[i];
+      if (!run.ok) { failures.push(`plan ${pair.resume} x ${pair.job}: ${run.error}`); return; }
+      const claims = run.value.questions.filter(q => q.kind === "resume_claim");
+      const valid = claims.filter(q => findBullet(resumes.get(pair.resume)!.parsed, q.bulletId));
+      planBullets += claims.length; planBulletsValid += valid.length;
+      say(`plan ${pair.resume} x ${pair.job}: ${run.value.questions.length} questions (${run.value.questions.map(q => q.kind).join(", ")}), ${valid.length}/${claims.length} resume bullets found`);
+      run.value.questions.forEach(q => say(`    - ${q.question}`));
+    });
+  }
+
   // ---------- Summary and baseline ----------
   const metrics: Record<string, number | null> = {
     jdRequiredRecall: ratio(reqFound, reqTotal),
@@ -331,6 +406,14 @@ const main = async () => {
     // Rewrites with nothing to flag, and rewrites with nothing the resume can't back up.
     tailorRewritesClean: ratio(rewritesClean, rewritesKept),
     tailorRewritesSupported: ratio(rewritesSupported, rewritesKept),
+    // Interview scores within the labelled bands, and follow-up and contradiction decisions that match the labels.
+    interviewScoreBands: ratio(bandsOk, bandsTotal),
+    interviewFollowUps: ratio(followUpOk, interviewCases),
+    interviewContradictions: ratio(contradictionOk, interviewCases),
+    // Scores above 3 that kept a quote from the answer, rather than being held at 3.
+    interviewHighScoresBacked: ratio(highBacked, highBacked + highCapped),
+    interviewFollowUpsWellFormed: ratio(followUpsWellFormed, followUpsAsked),
+    interviewPlanBulletsValid: ratio(planBulletsValid, planBullets),
   };
 
   const baseline = readJson<Record<string, number | null> | null>(BASELINE_FILE, null);
