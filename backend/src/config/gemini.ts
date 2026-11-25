@@ -17,7 +17,11 @@ let embeddingModel: GenerativeModel;
 export interface ResponseCache {
   get(key: string): unknown;
   set(key: string, value: unknown): void;
+  /** When set, a cached streamed response is replayed a word at a time with this delay, instead of in one piece. */
+  streamReplayDelayMs?: number;
 }
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 let responseCache: ResponseCache | null = null;
 
@@ -90,7 +94,12 @@ export const generateStructured = async <S extends z.ZodTypeAny>(schema: S, part
 export const streamText = async (prompt: string, onChunk: (text: string) => void): Promise<string> => {
   const key = requestKey({ model: FLASH_MODEL, temperature: TEMPERATURE, stream: true, prompt });
   const cached = responseCache?.get(key);
-  if (typeof cached === "string") { onChunk(cached); return cached; }
+  if (typeof cached === "string") {
+    const delay = responseCache?.streamReplayDelayMs;
+    if (!delay) { onChunk(cached); return cached; }
+    for (const word of cached.match(/\S+\s*/g) ?? []) { onChunk(word); await sleep(delay); }
+    return cached;
+  }
   if (!flashModel) throw new Error("Gemini not initialized");
   try {
     const result = await withRetry(() => flashModel.generateContentStream({

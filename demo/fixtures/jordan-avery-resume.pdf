@@ -1,0 +1,57 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 3 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 1893 >>
+stream
+BT /F1 10 Tf 56 750 Td (Jordan Avery) Tj ET
+BT /F1 10 Tf 56 737 Td (Backend Engineer) Tj ET
+BT /F1 10 Tf 56 724 Td (Austin, TX | jordan.avery@example.com) Tj ET
+BT /F1 10 Tf 56 711 Td (Authorized to work in the US without sponsorship) Tj ET
+BT /F1 10 Tf 56 685 Td (SUMMARY) Tj ET
+BT /F1 10 Tf 56 672 Td (Backend engineer with nearly 4 years of experience building APIs and data pipelines for fintech) Tj ET
+BT /F1 10 Tf 56 659 Td (products.) Tj ET
+BT /F1 10 Tf 56 633 Td (EXPERIENCE) Tj ET
+BT /F1 10 Tf 56 620 Td (Software Engineer, Ledgerly \(Austin, TX\)) Tj ET
+BT /F1 10 Tf 56 607 Td (Mar 2024 - Oct 2026) Tj ET
+BT /F1 10 Tf 56 594 Td (- Built payment reconciliation APIs in Node.js and TypeScript that handle 2 million) Tj ET
+BT /F1 10 Tf 56 581 Td (  transactions a day) Tj ET
+BT /F1 10 Tf 56 568 Td (- Designed PostgreSQL schemas and cut p95 query latency from 900ms to 120ms with targeted) Tj ET
+BT /F1 10 Tf 56 555 Td (  indexes) Tj ET
+BT /F1 10 Tf 56 542 Td (- Added Redis caching for account balances, reducing database load by 40%) Tj ET
+BT /F1 10 Tf 56 529 Td (- Containerized services with Docker and deployed them to AWS ECS) Tj ET
+BT /F1 10 Tf 56 503 Td (Junior Software Engineer, Brightpath Health \(Remote\)) Tj ET
+BT /F1 10 Tf 56 490 Td (Jan 2023 - Feb 2024) Tj ET
+BT /F1 10 Tf 56 477 Td (- Maintained Java Spring Boot services for appointment scheduling) Tj ET
+BT /F1 10 Tf 56 464 Td (- Wrote integration tests with Jest for the patient portal API) Tj ET
+BT /F1 10 Tf 56 438 Td (EDUCATION) Tj ET
+BT /F1 10 Tf 56 425 Td (B.S. in Computer Science, University of Texas at Austin, 2022) Tj ET
+BT /F1 10 Tf 56 399 Td (SKILLS) Tj ET
+BT /F1 10 Tf 56 386 Td (Languages: TypeScript, JavaScript, Java, SQL) Tj ET
+BT /F1 10 Tf 56 373 Td (Backend: Node.js, Express, PostgreSQL, Redis, GraphQL) Tj ET
+BT /F1 10 Tf 56 360 Td (Infrastructure: Docker, AWS, Kubernetes, GitHub Actions) Tj ET
+endstream
+endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000185 00000 n 
+0000000311 00000 n 
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+2256
+%%EOF

@@ -42,6 +42,11 @@ describe("parseStructuredOutput", () => {
     const output = JSON.stringify({ strengths: ["a"], gaps: ["a", "b", "c"], verdict: "v" });
     expect(() => parseStructuredOutput(output, FitSchema)).toThrow(/strengths/);
   });
+
+  it("accepts more fit strengths than asked for, since a retry would return the same output", () => {
+    const output = JSON.stringify({ strengths: ["a", "b", "c", "d"], gaps: ["a", "b", "c"], verdict: "v" });
+    expect(parseStructuredOutput(output, FitSchema).strengths).toHaveLength(4);
+  });
 });
 
 describe("requestStructuredOutput", () => {

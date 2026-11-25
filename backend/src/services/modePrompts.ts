@@ -7,9 +7,11 @@ JOB: ${JSON.stringify({ title: jd.title, company: jd.company, requiredSkills: jd
 RESUME: ${JSON.stringify({ name: resume.name, skills: resume.skills, tools: resume.tools, yearsOfExperience: resume.yearsOfExperience, workHistory: resume.workHistory, projects: resume.projects })}
 ${score ? `SCORE: ${score.finalScore}% | Missing: ${score.missingRequired.join(", ")}` : ""}`;
 
+// Gemini's schema can't limit array length, and at this temperature a retry repeats the same output, so a fourth
+// item is trimmed rather than rejected. Fewer than 3 is still an error.
 export const FitSchema = z.object({
-  strengths: z.array(z.string()).length(3).describe("Exactly 3 specific strengths citing resume content"),
-  gaps: z.array(z.string()).length(3).describe("Exactly 3 specific gaps relevant to the job"),
+  strengths: z.array(z.string()).min(3).describe("Exactly 3 specific strengths citing resume content"),
+  gaps: z.array(z.string()).min(3).describe("Exactly 3 specific gaps relevant to the job"),
   verdict: z.string().describe("One-line honest summary"),
 });
 
@@ -37,7 +39,7 @@ export const InterviewSchema = z.object({
 
 export const runFitAnalysis = async (jd: ParsedJD, resume: ParsedResume, score: ScoreBreakdown): Promise<FitAnalysisOutput> => {
   const data = await generateStructured(FitSchema, [{ text: `You are a senior recruiter. Analyze candidate fit.\n${ctx(jd, resume, score)}` }]);
-  return { scoreBreakdown: score, ...data };
+  return { scoreBreakdown: score, ...data, strengths: data.strengths.slice(0, 3), gaps: data.gaps.slice(0, 3) };
 };
 
 export const runGapAnalysis = async (jd: ParsedJD, resume: ParsedResume, score: ScoreBreakdown): Promise<GapAnalysisOutput> =>
