@@ -83,19 +83,57 @@ The eval found 8 bugs, all now fixed: requirement checks that ignored a city ins
 
 ## 🎬 Demo & Screenshots
 
-![JobLens AI Demo](./assets/demo.gif)
+[![JobLens AI walkthrough: click to watch the narrated video](./assets/demo.gif)](./assets/demo.mp4)
 
-### Score Card & Skill Grid
-![Score Card](./assets/score-card.png)
+**▶ [Watch the narrated walkthrough](./assets/demo.mp4)** (4:40, with voice) · [Transcript](./assets/TRANSCRIPT.md) · Subtitles built in
+
+The video walks through the running app: a resume and a job parsed by Gemini, the hybrid score with quoted evidence, the four generation modes, resume tailoring with claim checks, and a live mock interview that catches a figure that contradicts the resume. Every result on screen is a real Gemini 2.5 Flash response. The recording is scripted, so it can be made again with one command (see [Recording the demo](#-recording-the-demo)).
+
+### Score Card & Requirement Checks
+![Score card with the hybrid score breakdown and rule-based requirement checks](./assets/score-card.png)
+
+### Skill Evidence
+![Each matched skill with the resume line that shows it, confirmed in the PDF text](./assets/skill-evidence.png)
+
+### Fit Analysis
+![Fit analysis with strengths, areas to improve and a verdict](./assets/fit-analysis.png)
 
 ### Gap Analysis
-![Gap Analysis](./assets/gap-analysis.png)
+![Gap analysis with prioritized gaps and fixes](./assets/gap-analysis.png)
+
+### Resume Tailoring
+![Rewritten bullets with claim flags, the score change and the tailored resume](./assets/resume-tailoring.png)
 
 ### Cover Letter Mode
-![Cover Letter](./assets/cover-letter.png)
+![Cover letter generated from the resume](./assets/cover-letter.png)
 
 ### Interview Prep
-![Interview Prep](./assets/interview-prep.png)
+![Nine interview questions with answer frameworks](./assets/interview-prep.png)
+
+### Live Mock Interview
+![An answer scored with quotes, a contradiction with the resume flagged, and a streamed follow-up](./assets/mock-interview.png)
+
+### Interview Report
+![Interview report with per-criterion scores, strongest and weakest answers and what to practise](./assets/interview-report.png)
+
+### History & Dark Theme
+![History page with every analyzed job and its score](./assets/history.png)
+![The match report in the dark theme](./assets/dark-mode.png)
+
+---
+
+## ✦ How JobLens Uses LLMs
+
+| Technique | Where it's used |
+|---|---|
+| **Multimodal input** | Gemini 2.5 Flash reads the resume PDF directly, with no separate OCR step |
+| **Structured output** | Every generation call sends a `responseSchema` built from a Zod schema; the response is validated and retried if invalid |
+| **Embeddings + cosine similarity** | `gemini-embedding-001` vectors give the semantic 60% of the hybrid score |
+| **Grounding checks in code** | Quotes are confirmed against text extracted from the PDF; tailoring claims and interview scores above 3 must be backed by the resume or the candidate's own words |
+| **Streaming** | Interview follow-ups stream token by token over server-sent events |
+| **LLM-as-judge with a rubric** | Interview answers scored on structure, specifics and relevance, with consistency checks against the resume |
+| **Evaluation harness** | `npm run eval` runs the real pipeline over hand-labelled pairs and fails on a regression from the baseline |
+| **Response caching** | Responses are cached by model, schema and prompt, so evals and demo retakes replay without API calls |
 
 ## ⬡ Tech Stack
 
@@ -164,6 +202,8 @@ joblens-ai/
 │   ├── package.json
 │   ├── tsconfig.json
 │   └── .env.example
+│
+├── demo/                          # Scripted, narrated walkthrough recording (Playwright + TTS + ffmpeg)
 │
 └── frontend/
     ├── src/
@@ -262,6 +302,28 @@ npm run eval:baseline  # save the current results as the baseline
 ```
 
 Run `npm run eval` after any prompt, schema, model or scoring change. Requests missing from the cache need `GEMINI_API_KEY`. On the free tier the runner waits out rate limits, so a fresh run takes a few minutes.
+
+---
+
+## 🎥 Recording the Demo
+
+The walkthrough video is scripted with Playwright in [`demo/`](./demo), so it can be re-recorded after a UI change.
+
+```bash
+# 1. Start the backend with the demo cache, and the frontend as usual
+cd backend
+DEMO_CACHE=../demo/output/gemini-cache.json npm run dev     # PowerShell: $env:DEMO_CACHE="..."; npm run dev
+
+# 2. Record
+cd demo
+npm install
+npm run record:live     # first take: real Gemini calls (about 15), every response saved to the cache
+npm run voice           # narration from demo/narration.json: Gemini TTS, or Microsoft's neural voice as fallback
+npm run record:paced    # retake from the cache, each scene timed to its narration, no API calls
+npm run build           # MP4 with voice and subtitles, SRT/VTT, transcript and GIF in demo/output/
+```
+
+`DEMO_CACHE` is off unless set. Copy the finished files from `demo/output/` into `assets/`.
 
 ---
 
@@ -398,6 +460,7 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 | `MONGODB_URI` | MongoDB Atlas connection string |
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `CLIENT_URL` | Frontend URL for CORS (default: http://localhost:5173) |
+| `DEMO_CACHE` | Optional. A JSON file path that saves and replays Gemini responses, for recording the demo |
 
 ### Frontend `.env`
 | Variable | Description |
