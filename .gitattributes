@@ -1,2 +1,2 @@
-backend/eval/fixtures/** text eol=lf
-backend/eval/*.json text eol=lf
+# PDFs store byte offsets, so line endings must never be converted
+*.pdf binary
