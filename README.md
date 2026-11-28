@@ -87,7 +87,7 @@ The eval found 8 bugs, all now fixed: requirement checks that ignored a city ins
 
 **▶ [Watch the narrated walkthrough](./assets/demo.mp4)** (4:40, with voice) · [Transcript](./assets/TRANSCRIPT.md) · Subtitles built in
 
-The video walks through the running app: a resume and a job parsed by Gemini, the hybrid score with quoted evidence, the four generation modes, resume tailoring with claim checks, and a live mock interview that catches a figure that contradicts the resume. Every result on screen is a real Gemini 2.5 Flash response. The recording is scripted, so it can be made again with one command (see [Recording the demo](#-recording-the-demo)).
+The video walks through the running app: a resume and a job parsed by Gemini, the hybrid score with quoted evidence, the four generation modes, resume tailoring with claim checks, and a live mock interview that catches a figure that contradicts the resume. Every result on screen is a real Gemini 2.5 Flash response. The recording is scripted with Playwright in [`demo/`](./demo), so it can be made again after a UI change.
 
 ### Score Card & Requirement Checks
 ![Score card with the hybrid score breakdown and rule-based requirement checks](./assets/score-card.png)
@@ -305,28 +305,6 @@ Run `npm run eval` after any prompt, schema, model or scoring change. Requests m
 
 ---
 
-## 🎥 Recording the Demo
-
-The walkthrough video is scripted with Playwright in [`demo/`](./demo), so it can be re-recorded after a UI change.
-
-```bash
-# 1. Start the backend with the demo cache, and the frontend as usual
-cd backend
-DEMO_CACHE=../demo/output/gemini-cache.json npm run dev     # PowerShell: $env:DEMO_CACHE="..."; npm run dev
-
-# 2. Record
-cd demo
-npm install
-npm run record:live     # first take: real Gemini calls (about 15), every response saved to the cache
-npm run voice           # narration from demo/narration.json: Gemini TTS, or Microsoft's neural voice as fallback
-npm run record:paced    # retake from the cache, each scene timed to its narration, no API calls
-npm run build           # MP4 with voice and subtitles, SRT/VTT, transcript and GIF in demo/output/
-```
-
-`DEMO_CACHE` is off unless set. Copy the finished files from `demo/output/` into `assets/`.
-
----
-
 ## ↑ API Reference
 
 ### Jobs
@@ -477,12 +455,6 @@ Final Score = (Semantic Score × 0.60) + (Programmatic Score × 0.40)
 - **The interview eval covers the extremes** — its 7 answers are clearly strong or clearly weak, and the scorer gave them 5s and 1s. How well it separates middling answers isn't measured yet
 - **Quote verification needs a text layer** — scanned PDFs can still be parsed, but their quotes can't be confirmed. For two-column layouts, a quote may leave out up to 8 words at the start of a wrapped line and still count, because those words can't be told apart from the other column
 - **Place matching uses a built-in list** — US states, Canadian provinces, countries and common regions. A city outside it still matches by name, but can't be placed inside a larger area
-
----
-
-## ✦ Roadmap
-
-- [ ] Live demo, CI and a one-command Docker setup
 
 ---
 
